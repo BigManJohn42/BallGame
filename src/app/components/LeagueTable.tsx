@@ -56,7 +56,7 @@ export default function LeagueTable({
                     <button className="club-link" onClick={() => onPick(row.teamId)}>
                       <img src={row.logo} alt="" loading="lazy" />
                       <span>{row.name}</span>
-                      <span className="in-game">in play</span>
+                      <span className="in-game">view</span>
                     </button>
                   ) : (
                     <div className="club-link club-static">

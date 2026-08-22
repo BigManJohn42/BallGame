@@ -172,6 +172,20 @@ export type PlayerBoard = {
   rows: PlayerStat[];
 };
 
+/** Hand-written club background. Not available from any free API. */
+export type ClubProfile = {
+  teamId: number;
+  name: string;
+  founded: number;
+  stadium: string;
+  nickname: string;
+  /** Goes stale on its own; overridable with the MANAGERS env var. */
+  manager: string;
+  history: string;
+  honours: string[];
+  legends: string[];
+};
+
 /** A single club's whole season, for the per-player detail view. */
 export type ClubSeason = {
   team: Team;
@@ -180,6 +194,29 @@ export type ClubSeason = {
   played: PlayedMatch[];
   upcoming: UpcomingMatch[];
   leaguePosition: number | null;
+  leagueRow: LeagueRow | null;
+  profile: ClubProfile | null;
+  /** This club's best performers this season, from the live stat leaders. */
+  topPlayers: { label: string; unit: string; rows: PlayerStat[] }[];
+};
+
+/**
+ * A fixture between two clubs that are both in the game. The countdown at the
+ * top of the page points at the next one.
+ */
+export type Derby = {
+  fixtureId: number;
+  date: string;
+  competitionId: number;
+  competitionName: string;
+  homeTeamId: number;
+  homeName: string;
+  homeLogo: string;
+  homeOwner: string | null;
+  awayTeamId: number;
+  awayName: string;
+  awayLogo: string;
+  awayOwner: string | null;
 };
 
 export type GameState = {
@@ -192,6 +229,8 @@ export type GameState = {
   live: LiveMatch[];
   /** What has changed since the last gameweek. */
   summary: WeeklySummary;
+  /** Upcoming fixtures where both clubs are in the game. */
+  derbies: Derby[];
   recent: PlayedMatch[];
   upcoming: UpcomingMatch[];
   meta: {

@@ -114,7 +114,7 @@ export default function LeaderboardTable({
                         className="player-team player-team-link"
                         onClick={() => onPick(row.player.teamId)}
                       >
-                        {row.player.teamName} · fixtures &amp; results
+                        {row.player.teamName} · view club
                       </button>
                       {row.score.awards.length ? (
                         <div className="award-row">
@@ -186,7 +186,7 @@ export default function LeaderboardTable({
                   className="player-team player-team-link"
                   onClick={() => onPick(row.player.teamId)}
                 >
-                  {row.player.teamName} · fixtures &amp; results
+                  {row.player.teamName} · view club
                 </button>
               </div>
               <div className="card-points">
