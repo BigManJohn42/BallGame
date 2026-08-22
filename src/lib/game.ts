@@ -2,13 +2,16 @@ import { awardCatalogue, computeAwards } from "./awards";
 import { clubProfile } from "./clubs";
 import { COMPETITIONS } from "./competitions";
 import { findDerbies } from "./derbies";
+import { buildHype } from "./hype";
 import {
   DRAW_SEASON,
   TRACK_SEASON,
   getDrawPool,
   getFullTable,
+  getHeadToHead,
   getPlayerBoards,
   getResults,
+  topScorerFor,
   seasonLabel,
 } from "./football";
 import {
@@ -242,6 +245,37 @@ async function assembleSeason() {
     competitionName: (id) => COMPETITIONS.find((c) => c.id === id)?.name ?? "",
     now: Date.now(),
   });
+
+  // Every announced fixture gets its own write-up, built from the real record
+  // and the live table rather than anything invented. A failure here costs the
+  // blurb, not the countdown.
+  await Promise.all(
+    derbies.map(async (derby) => {
+      try {
+        const [headToHead, homeScorer, awayScorer] = await Promise.all([
+          getHeadToHead(derby.competitionId, derby.fixtureId),
+          topScorerFor(derby.homeTeamId),
+          topScorerFor(derby.awayTeamId),
+        ]);
+        derby.hype = buildHype({
+          homeTeamId: derby.homeTeamId,
+          homeName: derby.homeName,
+          homeOwner: derby.homeOwner,
+          awayTeamId: derby.awayTeamId,
+          awayName: derby.awayName,
+          awayOwner: derby.awayOwner,
+          competitionName: derby.competitionName,
+          headToHead,
+          homeRow: table.find((r) => r.teamId === derby.homeTeamId) ?? null,
+          awayRow: table.find((r) => r.teamId === derby.awayTeamId) ?? null,
+          homeScorer,
+          awayScorer,
+        });
+      } catch {
+        derby.hype = null;
+      }
+    }),
+  );
 
   const notices = [...storeErrors, ...pool.notices, ...results.notices, ...bonus.notices];
   if (store.kind === "memory") {

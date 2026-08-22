@@ -9,8 +9,16 @@ import type { Derby, UpcomingMatch } from "./types";
  * of them appears twice under the same id. That duplication is the signal.
  */
 
-/** How far past the first one to keep announcing, so a whole round is shown. */
-const ROUND_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
+/**
+ * How far past the first one to keep announcing, so a whole round goes up
+ * together rather than the entire rest of the season. A Serie A round spans
+ * Friday to Monday, hence four days.
+ */
+function roundWindowMs(): number {
+  const raw = process.env.DERBY_WINDOW_HOURS;
+  const hours = raw ? Number.parseInt(raw, 10) : NaN;
+  return (Number.isFinite(hours) && hours > 0 ? hours : 96) * 60 * 60 * 1000;
+}
 
 export function findDerbies(input: {
   upcoming: UpcomingMatch[];
@@ -51,6 +59,7 @@ export function findDerbies(input: {
       awayName: home.opponent,
       awayLogo: home.opponentLogo,
       awayOwner: input.owners.get(away.teamId) ?? null,
+      hype: null,
     });
   }
 
@@ -60,5 +69,6 @@ export function findDerbies(input: {
   // Announce the next one and anything else in the same round, not the whole
   // remaining season.
   const first = Date.parse(derbies[0].date);
-  return derbies.filter((d) => Date.parse(d.date) - first <= ROUND_WINDOW_MS);
+  const window = roundWindowMs();
+  return derbies.filter((d) => Date.parse(d.date) - first <= window);
 }
