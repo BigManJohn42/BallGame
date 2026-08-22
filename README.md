@@ -73,9 +73,19 @@ deep-linkable by URL hash:
 | **This week** | Who gained, who climbed, result of the week, and a summary you can paste into the group chat |
 | **Rules** | Every scoring value, including the bonuses |
 
-**A countdown to the next head-to-head** sits at the very top whenever two clubs in the
-game are about to play each other — the fixtures where one player's points come straight
-out of another's. If more than one falls in the same round, the rest are listed alongside.
+**Head-to-head countdowns** sit at the very top whenever clubs in the game are about to
+play each other — the fixtures where one player's points come straight out of another's.
+Every such fixture in the round gets its own countdown and its own write-up, not just the
+next one.
+
+Each write-up carries the real head-to-head record and last meeting (from ESPN), both
+clubs' league positions, and their leading scorers. Nothing is claimed that isn't in the
+data: before a ball is kicked it says so rather than quoting meaningless positions, and a
+missing record simply goes unmentioned. Named rivalries — the Derby della Madonnina, the
+Derby d'Italia — add a line of history, and are the only editorial part.
+
+A round is four days by default, so a Friday-to-Monday Serie A weekend announces together.
+Change it with `DERBY_WINDOW_HOURS`.
 
 **Any club's view.** Click a club anywhere — leaderboard, league table, draw pool or the
 countdown — and you get its league position and form, a short history, honours, legends,

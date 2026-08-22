@@ -200,11 +200,37 @@ export type ClubSeason = {
   topPlayers: { label: string; unit: string; rows: PlayerStat[] }[];
 };
 
+export type HeadToHeadMeeting = {
+  date: string;
+  homeTeamId: number;
+  homeName: string;
+  homeScore: number;
+  awayTeamId: number;
+  awayName: string;
+  awayScore: number;
+};
+
+/** Previous meetings between two clubs, as ESPN reports them. */
+export type HeadToHead = {
+  /** Already worded by the provider, e.g. "COMO leads series 2-1-2". */
+  summary: string;
+  meetings: HeadToHeadMeeting[];
+};
+
+/** The write-up above a head-to-head countdown. */
+export type DerbyHype = {
+  rivalry: string | null;
+  rivalryNote: string | null;
+  blurb: string;
+  facts: { label: string; value: string }[];
+};
+
 /**
- * A fixture between two clubs that are both in the game. The countdown at the
- * top of the page points at the next one.
+ * A fixture between two clubs that are both in the game. Each one gets its own
+ * countdown at the top of the page.
  */
 export type Derby = {
+  hype: DerbyHype | null;
   fixtureId: number;
   date: string;
   competitionId: number;

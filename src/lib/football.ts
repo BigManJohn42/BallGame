@@ -3,6 +3,8 @@ import { matchPoints, outcomeFor } from "./scoring";
 import { getStore } from "./store";
 import type {
   DataSource,
+  HeadToHead,
+  HeadToHeadMeeting,
   LeagueRow,
   LiveMatch,
   PlayerBoard,
@@ -872,6 +874,98 @@ function mergeStats(a: StatLine[], b: StatLine[]): StatLine[] {
     else merged.set(line.athleteId, { ...line });
   }
   return [...merged.values()];
+}
+
+/* ----------------------------------------------------------- head to head */
+
+const H2H_TTL = envInt("H2H_TTL", 60 * 60 * 12);
+
+type RawSeries = {
+  type?: string;
+  summary?: string;
+  events?: {
+    date?: string;
+    competitors?: {
+      homeAway?: string;
+      winner?: boolean;
+      score?: string;
+      team?: { id?: string; displayName?: string; abbreviation?: string };
+    }[];
+  }[];
+};
+
+/**
+ * Previous meetings between the two clubs in a fixture. ESPN carries this on
+ * the match summary as `seasonseries`, already worded ("COMO leads series
+ * 2-1-2"), which beats inventing a record from partial data.
+ */
+export async function getHeadToHead(
+  competitionId: number,
+  fixtureId: number,
+): Promise<HeadToHead | null> {
+  const competition = COMPETITIONS.find((c) => c.id === competitionId);
+  if (!competition || !fixtureId) return null;
+
+  try {
+    const { data } = await swr(`h2h:${competition.slug}:${fixtureId}`, H2H_TTL, async () => {
+      const payload = (await espn(
+        `${ESPN_SITE}/${competition.slug}/summary?event=${fixtureId}`,
+      )) as { seasonseries?: RawSeries[] };
+
+      const series = payload?.seasonseries?.find((s) => s.type === "head-to-head");
+      if (!series) return null;
+
+      const meetings: HeadToHeadMeeting[] = [];
+      for (const event of series.events ?? []) {
+        const home = event.competitors?.find((c) => c.homeAway === "home");
+        const away = event.competitors?.find((c) => c.homeAway === "away");
+        const homeId = Number(home?.team?.id);
+        const awayId = Number(away?.team?.id);
+        const homeScore = toNumberOrNull(home?.score);
+        const awayScore = toNumberOrNull(away?.score);
+        if (
+          !Number.isFinite(homeId) ||
+          !Number.isFinite(awayId) ||
+          homeScore === null ||
+          awayScore === null ||
+          !event.date
+        ) {
+          continue;
+        }
+        meetings.push({
+          date: event.date,
+          homeTeamId: homeId,
+          homeName: home?.team?.displayName ?? "",
+          homeScore,
+          awayTeamId: awayId,
+          awayName: away?.team?.displayName ?? "",
+          awayScore,
+        });
+      }
+
+      meetings.sort((a, b) => b.date.localeCompare(a.date));
+      return { summary: series.summary ?? "", meetings } satisfies HeadToHead;
+    });
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** The club's leading scorer this season, for fixture previews. */
+export async function topScorerFor(
+  teamId: number,
+): Promise<{ name: string; goals: number } | null> {
+  try {
+    const leaders = await getLeaders();
+    const best = leaders.goals
+      .filter((l) => l.teamId === teamId && l.value > 0)
+      .sort((a, b) => b.value - a.value)[0];
+    if (!best) return null;
+    return { name: await athleteName(best.athleteId), goals: best.value };
+  } catch {
+    return null;
+  }
 }
 
 /* --------------------------------------------------------- league position */
