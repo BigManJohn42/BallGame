@@ -8,6 +8,13 @@ import {
   getResults,
   seasonLabel,
 } from "./football";
+import {
+  advanceHistory,
+  diffAgainst,
+  snapshotOf,
+  type History,
+  type RankedRow,
+} from "./movement";
 import { CLEAN_SHEET_BONUS, GOAL_BONUS } from "./scoring";
 import { getStore } from "./store";
 import type {
@@ -16,6 +23,7 @@ import type {
   GameState,
   LeaderboardRow,
   LeagueRow,
+  Movement,
   Player,
   Team,
   TeamScore,
@@ -74,9 +82,44 @@ function emptyScore(teamId: number): TeamScore {
   };
 }
 
+/* -------------------------------------------------------------- movement */
+
+const HISTORY_KEY = "standings-history";
+const HISTORY_TTL = 60 * 60 * 24 * 400; // a season and then some
+
+/** Persistence around the pure logic in movement.ts. */
+async function readMovement(
+  rows: LeaderboardRow[],
+  playedTotal: number,
+): Promise<Record<string, Movement>> {
+  const store = getStore();
+  const ranked: RankedRow[] = rows.map((r) => ({
+    rank: r.rank,
+    playerId: r.player.id,
+    points: r.score.points,
+  }));
+
+  let history: History | null = null;
+  try {
+    history = await store.cacheGet<History>(HISTORY_KEY);
+  } catch {
+    return {};
+  }
+
+  const { baseline, save } = advanceHistory(
+    history,
+    snapshotOf(ranked, playedTotal, Date.now()),
+  );
+  if (save) {
+    await store.cacheSet<History>(HISTORY_KEY, save, HISTORY_TTL).catch(() => {});
+  }
+  return diffAgainst(baseline, ranked);
+}
+
 export function buildLeaderboard(
   players: Player[],
   scores: Record<number, TeamScore>,
+  movement: Record<string, Movement> = {},
 ): LeaderboardRow[] {
   const rows = players
     .map((player) => ({ player, score: scores[player.teamId] ?? emptyScore(player.teamId) }))
@@ -97,7 +140,12 @@ export function buildLeaderboard(
     const rank = lastPoints === row.score.points ? lastRank : i + 1;
     lastPoints = row.score.points;
     lastRank = rank;
-    return { rank, player: row.player, score: row.score };
+    return {
+      rank,
+      player: row.player,
+      score: row.score,
+      movement: movement[row.player.id] ?? null,
+    };
   });
 }
 
@@ -159,7 +207,16 @@ async function assembleSeason() {
     score.points = score.matchPoints + score.bonusPoints;
   }
 
-  const leaderboard = buildLeaderboard(players, results.scores);
+  // Ranked once without movement, then again with it, so the arrows compare
+  // like for like.
+  const ranked = buildLeaderboard(players, results.scores);
+  const playedTotal = trackedTeams.reduce(
+    (n, t) => n + (results.scores[t.id]?.played ?? 0),
+    0,
+  );
+  const movement = await readMovement(ranked, playedTotal).catch(() => ({}));
+  const leaderboard = buildLeaderboard(players, results.scores, movement);
+
   const table = await getFullTable(TRACK_SEASON)
     .then((t) => t.rows)
     .catch(() => [] as LeagueRow[]);
@@ -189,6 +246,7 @@ export async function getGameState(me: Player | null): Promise<GameState> {
     teams: pool.teams,
     leaderboard,
     table,
+    live: results.live,
     recent: results.played.filter((m) => inFeed(m.teamId)).slice(0, 24),
     upcoming: results.upcoming.filter((m) => inFeed(m.teamId)).slice(0, 12),
     meta: {

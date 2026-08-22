@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import ClubPanel from "./ClubPanel";
 import LeaderboardTable from "./LeaderboardTable";
 import LeagueTable from "./LeagueTable";
+import LiveNow from "./LiveNow";
 import { Fixtures, Results } from "./MatchFeed";
 import ScoringPanel from "./ScoringPanel";
 import type { GameState, Team } from "@/lib/types";
@@ -278,6 +279,8 @@ export default function Game({ initial }: { initial: GameState }) {
         </p>
       ) : null}
 
+      <LiveNow matches={state.live} meta={state.meta} onPick={setOpenClub} />
+
       <section className="section">
         <div className="section-head">
           <h2>Leaderboard</h2>
@@ -290,6 +293,7 @@ export default function Game({ initial }: { initial: GameState }) {
         <LeaderboardTable
           rows={state.leaderboard}
           meId={me?.id ?? null}
+          competitions={state.meta.competitions}
           onPick={setOpenClub}
         />
       </section>

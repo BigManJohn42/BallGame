@@ -56,6 +56,30 @@ export type Award = {
   provisional: boolean;
 };
 
+/** A match in progress right now. Scores nothing until it finishes. */
+export type LiveMatch = {
+  fixtureId: number;
+  teamId: number;
+  competitionId: number;
+  competitionName: string;
+  opponent: string;
+  opponentLogo: string;
+  home: boolean;
+  goalsFor: number;
+  goalsAgainst: number;
+  /** e.g. "52'" */
+  clock: string;
+  /** e.g. "Second Half", "Halftime" */
+  phase: string;
+};
+
+/** How a player has moved since the last time any match was played. */
+export type Movement = {
+  /** Positive means climbed. Null for a player with no earlier standing. */
+  rankChange: number | null;
+  pointsGained: number;
+};
+
 export type TeamScore = {
   teamId: number;
   /** matchPoints + bonusPoints. */
@@ -78,6 +102,7 @@ export type LeaderboardRow = {
   rank: number;
   player: Player;
   score: TeamScore;
+  movement: Movement | null;
 };
 
 export type DataSource = "live" | "override" | "placeholder";
@@ -117,6 +142,8 @@ export type GameState = {
   leaderboard: LeaderboardRow[];
   /** The real Serie A table, separate from the player standings. */
   table: LeagueRow[];
+  /** Matches involving a tracked club that are being played right now. */
+  live: LiveMatch[];
   recent: PlayedMatch[];
   upcoming: UpcomingMatch[];
   meta: {
