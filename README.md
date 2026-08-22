@@ -34,25 +34,16 @@ touching code.
 
 ## Setup
 
-### 1. Get a free football API key
-
-Sign up at [dashboard.api-football.com](https://dashboard.api-football.com) and copy your
-key. The free tier is 100 requests a day, which is plenty — this app caches aggressively
-and a seven-player game costs roughly 30 calls a day.
-
-API-Football is used because it is the only free tier that covers all six competitions you
-asked for. football-data.org has a nicer free tier but no Coppa Italia, no Supercoppa and
-no Conference League.
-
-### 2. Deploy
+### 1. Deploy
 
 ```bash
 npx vercel
 ```
 
-Or push the repo to GitHub and import it at [vercel.com/new](https://vercel.com/new).
+Or push the repo to GitHub and import it at [vercel.com/new](https://vercel.com/new). The
+framework preset is **Next.js** and it is detected automatically.
 
-### 3. Add a Redis store (strongly recommended)
+### 2. Add a Redis store
 
 In your Vercel project: **Storage → Create Database → Upstash for Redis**, then connect it
 to the project. Vercel injects `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically.
@@ -60,30 +51,32 @@ to the project. Vercel injects `KV_REST_API_URL` and `KV_REST_API_TOKEN` automat
 Without it the app still runs, but players are held in memory and disappear whenever the
 serverless function is recycled. Fine for a local look around, useless for a real game.
 
-### 4. Set the environment variables
+### 3. That's it
 
-In **Settings → Environment Variables**, at minimum:
+There is no API key to configure. See [.env.example](.env.example) for the optional knobs.
 
-```
-API_FOOTBALL_KEY=your_key_here
-```
+## Where the data comes from
 
-See [.env.example](.env.example) for everything else that can be tuned.
+ESPN's public soccer API — no account, no key, no rate limit — via two endpoints:
 
-### 5. Check the draw pool
+- `…/soccer/ita.1/standings?season=2025` for the 2025/26 final table the draw uses.
+- `…/soccer/{slug}/scoreboard?dates=20260701-20270629&limit=1000` for results, once per
+  competition. One request returns an entire season, so a refresh costs six calls total no
+  matter how many clubs are being tracked.
 
-Open the site. If the header says **Live data** and the seven clubs look right, you are
-done. If you see a warning that the 2025/26 table could not be read (some free plans
-restrict historical seasons), pin the seven by hand:
+This was chosen because it is the only free source covering all six of these competitions
+for the current season. API-Football's free tier stops at 2024; football-data.org's free
+tier has no Coppa Italia, Supercoppa or Conference League.
 
-```
-SERIE_A_TOP7=505:Inter,492:Napoli,499:Atalanta,496:Juventus,489:AC Milan,497:AS Roma,487:Lazio
-```
+**The trade-off:** this endpoint is undocumented and carries no stability guarantee. Every
+response is parsed defensively, cached, and served stale rather than erroring if a call
+fails, so a hiccup shows slightly old numbers instead of a broken page. If ESPN ever
+changes it, `GET /api/leagues` will show you which of the six slugs stopped resolving, and
+`SERIE_A_TOP7` lets you pin the draw pool by hand in the meantime.
 
-in finishing order, first to seventh. Ids are api-football team ids; `GET /api/leagues` on
-your deployment confirms the six competition ids against your plan.
-
-Then send the URL to your friends.
+Caching: standings once a day, scoreboards every three hours, with a stale-while-revalidate
+layer and a single-flight lock so a burst of visitors is not a burst of upstream requests.
+A daily Vercel cron warms it all.
 
 ## Running locally
 
@@ -98,11 +91,11 @@ npm install
 npm run dev
 ```
 
-Copy `.env.example` to `.env.local` and fill in your key first. Without Redis credentials
-it falls back to in-memory storage, which is exactly what you want for local poking.
+No `.env.local` is required. Without Redis credentials it falls back to in-memory storage,
+which is what you want for local poking.
 
-Want to see a full leaderboard immediately instead of an empty August table? Set
-`TRACK_SEASON=2025` and it scores the completed 2025/26 season instead.
+Want to see a full leaderboard immediately instead of a table that has barely kicked off?
+Set `TRACK_SEASON=2025` and it scores the completed 2025/26 season instead.
 
 ## API
 
@@ -111,18 +104,9 @@ Want to see a full leaderboard immediately instead of an empty August table? Set
 | `GET /api/state`          | Everything the page renders: pool, leaderboard, results, fixtures |
 | `POST /api/join`          | `{ "name": "..." }` — deals a club and sets the player cookie   |
 | `POST /api/leave`         | Gives up your club and frees your name                          |
-| `POST /api/refresh`       | Forces a re-read of results, rate limited to once per 10 min    |
+| `POST /api/refresh`       | Forces a re-read of results, rate limited to once a minute      |
 | `GET /api/cron`           | Daily warm-up, wired in `vercel.json`                           |
-| `GET /api/leagues`        | Setup helper: checks the six league ids against your plan       |
+| `GET /api/leagues`        | Health check: confirms all six ESPN slugs still resolve         |
 
 Players are identified by an opaque token in an httpOnly cookie — no passwords, no
 accounts. Clearing cookies means losing the club, which is why `/api/leave` exists.
-
-## Quota notes
-
-- Standings are fetched once a day; each club's fixtures once every six hours.
-- Cached data is served stale rather than refetched if the provider errors, so a rate
-  limit degrades into slightly old numbers instead of a broken page.
-- The manual refresh button is locked behind a 10 minute cooldown for the same reason.
-- A daily Vercel cron warms the cache so the first visitor of the day is not the one
-  waiting on seven API calls.

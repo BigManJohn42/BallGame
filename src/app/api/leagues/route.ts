@@ -1,21 +1,17 @@
 import { NextResponse } from "next/server";
-import { hasApiKey, lookupLeagues } from "@/lib/football";
+import { checkCompetitions } from "@/lib/football";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 /**
- * Setup helper. /api/leagues checks the six configured ids against your plan,
- * and /api/leagues?search=coppa finds an id if the provider ever renumbers one.
- * Costs one API request per league, so use it sparingly.
+ * Setup helper: confirms all six ESPN league slugs still resolve and reports how
+ * many fixtures each currently has for the tracked season.
  */
-export async function GET(request: Request) {
-  if (!hasApiKey()) {
-    return NextResponse.json({ error: "API_FOOTBALL_KEY is not set" }, { status: 400 });
-  }
-  const search = new URL(request.url).searchParams.get("search") ?? undefined;
+export async function GET() {
   try {
-    return NextResponse.json({ result: await lookupLeagues(search ?? undefined) });
+    return NextResponse.json({ competitions: await checkCompetitions() });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Lookup failed" },

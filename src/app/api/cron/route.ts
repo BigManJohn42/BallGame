@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { getDrawPool, invalidateResults } from "@/lib/football";
+import { invalidateResults } from "@/lib/football";
 import { getGameState } from "@/lib/game";
 import { getStore } from "@/lib/store";
-import type { Team } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Hit daily by the Vercel cron in vercel.json. Refetches every tracked club so
+ * Hit daily by the Vercel cron in vercel.json. Refetches every competition so
  * the leaderboard is already warm when someone opens the page.
  */
 export async function GET(request: Request) {
@@ -22,30 +21,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const store = getStore();
-    const [pool, players] = await Promise.all([getDrawPool(), store.listPlayers()]);
-
-    const teams: Team[] = [...pool.teams];
-    const known = new Set(teams.map((t) => t.id));
-    for (const player of players) {
-      if (!known.has(player.teamId)) {
-        known.add(player.teamId);
-        teams.push({
-          id: player.teamId,
-          name: player.teamName,
-          logo: player.teamLogo,
-          rank: player.teamRank,
-        });
-      }
-    }
-
-    await invalidateResults(teams);
+    await invalidateResults();
     const state = await getGameState(null);
 
     return NextResponse.json({
       ok: true,
-      teams: teams.length,
-      players: players.length,
+      players: (await getStore().listPlayers()).length,
       matchesCounted: state.leaderboard.reduce((n, row) => n + row.score.played, 0),
       notices: state.meta.notices,
     });

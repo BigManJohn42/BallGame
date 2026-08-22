@@ -1,7 +1,17 @@
-import { COMPETITIONS, SERIE_A_ID, competitionById, isTracked } from "./competitions";
+import { COMPETITIONS, SERIE_A, type Competition } from "./competitions";
 import { matchPoints, outcomeFor } from "./scoring";
 import { getStore } from "./store";
 import type { DataSource, PlayedMatch, Team, TeamScore, UpcomingMatch } from "./types";
+
+/**
+ * Data comes from ESPN's public soccer API: no key, no quota, and it covers all
+ * six competitions for current seasons. It is undocumented, so every response is
+ * parsed defensively and cached, and a failure falls back to stale data rather
+ * than an error page.
+ */
+
+const ESPN_SITE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+const ESPN_CORE = "https://site.api.espn.com/apis/v2/sports/soccer";
 
 /* ------------------------------------------------------------------ config */
 
@@ -19,62 +29,38 @@ export const TRACK_SEASON = envInt("TRACK_SEASON", 2026);
 export const TOP_N = envInt("TOP_N", 7);
 
 const STANDINGS_TTL = envInt("STANDINGS_TTL", 60 * 60 * 24); // 1 day
-const FIXTURES_TTL = envInt("FIXTURES_TTL", 60 * 60 * 6); // 6 hours
+const FIXTURES_TTL = envInt("FIXTURES_TTL", 60 * 60 * 3); // 3 hours
 const HARD_TTL = envInt("CACHE_HARD_TTL", 60 * 60 * 24 * 14); // keep stale data 2 weeks
 
 export function seasonLabel(season: number): string {
   return `${season}/${String((season + 1) % 100).padStart(2, "0")}`;
 }
 
-export function hasApiKey(): boolean {
-  return Boolean(process.env.API_FOOTBALL_KEY);
+/**
+ * A season runs July to June. ESPN rejects a `dates` range longer than a year,
+ * so this stops just short of one.
+ */
+function seasonWindow(season: number): string {
+  return `${season}0701-${season + 1}0629`;
+}
+
+function logoFor(teamId: number): string {
+  return `https://a.espncdn.com/i/teamlogos/soccer/500/${teamId}.png`;
 }
 
 /* ------------------------------------------------------------ http client */
 
 class ProviderError extends Error {}
 
-type ApiPayload<T> = { response?: T[]; errors?: unknown; results?: number };
-
-function providerErrors(payload: { errors?: unknown }): string[] {
-  const e = payload.errors;
-  if (!e) return [];
-  if (Array.isArray(e)) return e.map((x) => String(x));
-  if (typeof e === "object") {
-    return Object.entries(e as Record<string, unknown>).map(([k, v]) => `${k}: ${v}`);
-  }
-  return [String(e)];
-}
-
-async function apiFootball<T>(
-  path: string,
-  params: Record<string, string | number>,
-): Promise<T[]> {
-  const key = process.env.API_FOOTBALL_KEY;
-  if (!key) throw new ProviderError("API_FOOTBALL_KEY is not set");
-
-  // Direct api-sports.io by default. Set API_FOOTBALL_HOST to the RapidAPI host
-  // instead if the key was issued through RapidAPI.
-  const host = process.env.API_FOOTBALL_HOST || "v3.football.api-sports.io";
-  const viaRapidApi = host.includes("rapidapi.com");
-  const base = viaRapidApi ? `https://${host}/v3` : `https://${host}`;
-
-  const url = new URL(`${base}${path}`);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-
-  const headers: Record<string, string> = viaRapidApi
-    ? { "x-rapidapi-key": key, "x-rapidapi-host": host }
-    : { "x-apisports-key": key };
-
-  const res = await fetch(url, { headers, cache: "no-store" });
+async function espn(url: string): Promise<unknown> {
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: { accept: "application/json" },
+  });
   if (!res.ok) {
-    throw new ProviderError(`${path} returned HTTP ${res.status} ${res.statusText}`);
+    throw new ProviderError(`ESPN returned HTTP ${res.status} ${res.statusText}`);
   }
-
-  const payload = (await res.json()) as ApiPayload<T>;
-  const errors = providerErrors(payload);
-  if (errors.length) throw new ProviderError(errors.join("; "));
-  return payload.response ?? [];
+  return res.json();
 }
 
 /* -------------------------------------------------- stale-while-revalidate */
@@ -92,7 +78,8 @@ async function swr<T>(
     return { data: entry.data, at: entry.at, error: null };
   }
 
-  // One refresh at a time: the free plan has a daily request budget to protect.
+  // One refresh at a time, so a burst of visitors does not become a burst of
+  // upstream requests.
   const mayFetch = entry ? await store.acquireLock(key, 60) : true;
   if (!mayFetch && entry) return { data: entry.data, at: entry.at, error: null };
 
@@ -108,84 +95,72 @@ async function swr<T>(
   }
 }
 
-/* ------------------------------------------------------------- team lookup */
-
-type RawTeamEntry = { team: { id: number; name: string; logo: string } };
-
-/** id to name/logo for every Serie A club: one request, cached for a month. */
-async function serieATeamDirectory(): Promise<Map<number, { name: string; logo: string }>> {
-  const { data } = await swr(
-    `teams:${SERIE_A_ID}:${DRAW_SEASON}`,
-    60 * 60 * 24 * 30,
-    async () => {
-      const rows = await apiFootball<RawTeamEntry>("/teams", {
-        league: SERIE_A_ID,
-        season: DRAW_SEASON,
-      });
-      return rows.map((r) => r.team);
-    },
-  );
-  return new Map(data.map((t) => [t.id, { name: t.name, logo: t.logo }] as const));
-}
-
-function logoFor(id: number): string {
-  return `https://media.api-sports.io/football/teams/${id}.png`;
-}
-
 /* ------------------------------------------------------------------- teams */
 
 /**
- * Used only when neither an API key nor an override is configured, so the app
- * is still clickable out of the box. These are NOT the real 2025/26 final
- * positions, and the UI says as much.
+ * The real 2025/26 Serie A top seven, read from ESPN's final table. Used only
+ * if the standings call itself fails, so the draw never stops working.
  */
-const PLACEHOLDER_TOP7: Team[] = [
-  { id: 505, name: "Inter", rank: 1, logo: logoFor(505) },
-  { id: 492, name: "Napoli", rank: 2, logo: logoFor(492) },
-  { id: 499, name: "Atalanta", rank: 3, logo: logoFor(499) },
-  { id: 496, name: "Juventus", rank: 4, logo: logoFor(496) },
-  { id: 489, name: "AC Milan", rank: 5, logo: logoFor(489) },
-  { id: 497, name: "AS Roma", rank: 6, logo: logoFor(497) },
-  { id: 487, name: "Lazio", rank: 7, logo: logoFor(487) },
+const KNOWN_TOP7: Team[] = [
+  { id: 110, name: "Internazionale", rank: 1, logo: logoFor(110) },
+  { id: 114, name: "Napoli", rank: 2, logo: logoFor(114) },
+  { id: 104, name: "AS Roma", rank: 3, logo: logoFor(104) },
+  { id: 2572, name: "Como", rank: 4, logo: logoFor(2572) },
+  { id: 103, name: "AC Milan", rank: 5, logo: logoFor(103) },
+  { id: 111, name: "Juventus", rank: 6, logo: logoFor(111) },
+  { id: 105, name: "Atalanta", rank: 7, logo: logoFor(105) },
 ];
 
-type RawStandingRow = {
-  rank: number;
-  team: { id: number; name: string; logo: string };
+type StandingsEntry = {
+  team?: {
+    id?: string;
+    displayName?: string;
+    shortDisplayName?: string;
+    logos?: { href?: string }[];
+  };
+  stats?: { name?: string; value?: number }[];
 };
-type RawStandings = { league: { standings: RawStandingRow[][] } };
 
-async function parseOverride(): Promise<Team[] | null> {
+function readStandings(payload: unknown): Team[] {
+  const root = payload as {
+    children?: { standings?: { entries?: StandingsEntry[] } }[];
+    standings?: { entries?: StandingsEntry[] };
+  };
+  const entries =
+    root?.children?.[0]?.standings?.entries ?? root?.standings?.entries ?? [];
+
+  const teams: Team[] = [];
+  for (const entry of entries) {
+    const id = Number(entry?.team?.id);
+    if (!Number.isFinite(id)) continue;
+    const rank = entry?.stats?.find((s) => s.name === "rank")?.value;
+    teams.push({
+      id,
+      name: entry.team?.displayName ?? entry.team?.shortDisplayName ?? `Team ${id}`,
+      logo: entry.team?.logos?.[0]?.href ?? logoFor(id),
+      rank: typeof rank === "number" ? rank : teams.length + 1,
+    });
+  }
+  // ESPN normally returns these in order, but do not rely on it.
+  return teams.sort((a, b) => a.rank - b.rank);
+}
+
+function parseOverride(): Team[] | null {
   const raw = process.env.SERIE_A_TOP7;
   if (!raw || !raw.trim()) return null;
 
-  const parts = raw
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (!parts.length) return null;
-
-  let directory: Map<number, { name: string; logo: string }> | null = null;
   const teams: Team[] = [];
-
-  for (const [i, part] of parts.entries()) {
+  for (const part of raw.split(",").map((p) => p.trim()).filter(Boolean)) {
     const [idPart, ...nameParts] = part.split(":");
     const id = Number.parseInt(idPart.trim(), 10);
     if (!Number.isFinite(id)) continue;
-
-    let name = nameParts.join(":").trim();
-    let logo = logoFor(id);
-    if (!name) {
-      if (!directory && hasApiKey()) {
-        directory = await serieATeamDirectory().catch(() => null);
-      }
-      const hit = directory ? directory.get(id) : undefined;
-      name = hit?.name ?? `Team ${id}`;
-      if (hit?.logo) logo = hit.logo;
-    }
-    teams.push({ id, name, logo, rank: i + 1 });
+    teams.push({
+      id,
+      name: nameParts.join(":").trim() || `Team ${id}`,
+      logo: logoFor(id),
+      rank: teams.length + 1,
+    });
   }
-
   return teams.length ? teams : null;
 }
 
@@ -194,9 +169,7 @@ export async function getDrawPool(): Promise<{
   source: DataSource;
   notices: string[];
 }> {
-  const notices: string[] = [];
-
-  const override = await parseOverride();
+  const override = parseOverride();
   if (override) {
     return {
       teams: override.slice(0, TOP_N),
@@ -205,120 +178,128 @@ export async function getDrawPool(): Promise<{
     };
   }
 
-  if (!hasApiKey()) {
-    notices.push(
-      `No API_FOOTBALL_KEY set, so these are placeholder clubs rather than the real ${seasonLabel(
-        DRAW_SEASON,
-      )} top ${TOP_N}. Add a free key (or set SERIE_A_TOP7) and the real table loads.`,
-    );
-    return { teams: PLACEHOLDER_TOP7.slice(0, TOP_N), source: "placeholder", notices };
-  }
-
+  const notices: string[] = [];
   try {
     const { data, error } = await swr(
-      `standings:${SERIE_A_ID}:${DRAW_SEASON}`,
+      `standings:${SERIE_A.slug}:${DRAW_SEASON}`,
       STANDINGS_TTL,
-      async () => {
-        const rows = await apiFootball<RawStandings>("/standings", {
-          league: SERIE_A_ID,
-          season: DRAW_SEASON,
-        });
-        const table = rows[0]?.league?.standings?.[0] ?? [];
-        return table.map((row) => ({
-          id: row.team.id,
-          name: row.team.name,
-          logo: row.team.logo,
-          rank: row.rank,
-        }));
-      },
+      async () =>
+        readStandings(
+          await espn(`${ESPN_CORE}/${SERIE_A.slug}/standings?season=${DRAW_SEASON}`),
+        ),
     );
     if (error) notices.push(`Standings served from cache: ${error}`);
-    if (data.length) {
+    if (data.length >= TOP_N) {
       return { teams: data.slice(0, TOP_N), source: "live", notices };
     }
     notices.push(
-      `The provider returned no ${seasonLabel(
-        DRAW_SEASON,
-      )} Serie A table (a free plan may not cover that season). Showing placeholders. Set SERIE_A_TOP7 to pin the real seven.`,
+      `The ${seasonLabel(DRAW_SEASON)} Serie A table came back short (${
+        data.length
+      } clubs). Using the known final table instead.`,
     );
   } catch (err) {
     notices.push(
       `Could not load the ${seasonLabel(DRAW_SEASON)} Serie A table: ${
         err instanceof Error ? err.message : String(err)
-      }. Showing placeholders. Set SERIE_A_TOP7 to pin the real seven.`,
+      }. Using the known final table instead.`,
     );
   }
 
-  return { teams: PLACEHOLDER_TOP7.slice(0, TOP_N), source: "placeholder", notices };
+  return { teams: KNOWN_TOP7.slice(0, TOP_N), source: "placeholder", notices };
 }
 
 /* ----------------------------------------------------------------- results */
 
-type RawFixture = {
-  fixture: { id: number; date: string; status: { short: string } };
-  league: { id: number; name: string; season: number; round: string };
-  teams: {
-    home: { id: number; name: string; logo: string };
-    away: { id: number; name: string; logo: string };
-  };
-  goals: { home: number | null; away: number | null };
-  score?: { penalty?: { home: number | null; away: number | null } };
+/** Trimmed to what scoring needs, because the raw feed is far too big to cache. */
+type CachedSide = {
+  id: number;
+  name: string;
+  logo: string;
+  score: number | null;
+  pens: number | null;
 };
 
-const FINISHED = new Set(["FT", "AET", "PEN"]);
-const VOID = new Set(["PST", "CANC", "ABD", "AWD", "WO", "SUSP", "INT", "TBD"]);
+type CachedMatch = {
+  id: string;
+  date: string;
+  round: string;
+  done: boolean;
+  upcoming: boolean;
+  home: CachedSide;
+  away: CachedSide;
+};
 
-function toPlayed(fx: RawFixture, teamId: number): PlayedMatch | null {
-  const goalsHome = fx.goals.home;
-  const goalsAway = fx.goals.away;
-  if (goalsHome === null || goalsAway === null) return null;
+type RawCompetitor = {
+  homeAway?: string;
+  score?: string | number;
+  shootoutScore?: number;
+  team?: { id?: string; displayName?: string; shortDisplayName?: string; logo?: string };
+};
 
-  const home = fx.teams.home.id === teamId;
-  const other = home ? fx.teams.away : fx.teams.home;
-  const { outcome, viaPenalties } = outcomeFor({
-    teamId,
-    homeId: fx.teams.home.id,
-    goalsHome,
-    goalsAway,
-    penaltyHome: fx.score?.penalty?.home ?? null,
-    penaltyAway: fx.score?.penalty?.away ?? null,
-  });
+type RawEvent = {
+  id?: string;
+  date?: string;
+  season?: { slug?: string };
+  status?: { type?: { state?: string; completed?: boolean } };
+  competitions?: { competitors?: RawCompetitor[] }[];
+};
 
-  const goalsFor = home ? goalsHome : goalsAway;
-  const goalsAgainst = home ? goalsAway : goalsHome;
+function toNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
 
+function readSide(competitor: RawCompetitor | undefined): CachedSide | null {
+  const id = Number(competitor?.team?.id);
+  if (!Number.isFinite(id)) return null;
   return {
-    fixtureId: fx.fixture.id,
-    teamId,
-    competitionId: fx.league.id,
-    competitionName: competitionById(fx.league.id)?.name ?? fx.league.name,
-    round: fx.league.round,
-    date: fx.fixture.date,
-    opponent: other.name,
-    opponentLogo: other.logo,
-    home,
-    goalsFor,
-    goalsAgainst,
-    outcome,
-    viaPenalties,
-    points: matchPoints({ competitionId: fx.league.id, outcome, goalsFor, goalsAgainst }),
+    id,
+    name:
+      competitor?.team?.displayName ?? competitor?.team?.shortDisplayName ?? `Team ${id}`,
+    logo: competitor?.team?.logo ?? logoFor(id),
+    score: toNumberOrNull(competitor?.score),
+    pens: toNumberOrNull(competitor?.shootoutScore),
   };
 }
 
-function toUpcoming(fx: RawFixture, teamId: number): UpcomingMatch {
-  const home = fx.teams.home.id === teamId;
-  const other = home ? fx.teams.away : fx.teams.home;
-  return {
-    fixtureId: fx.fixture.id,
-    teamId,
-    competitionId: fx.league.id,
-    competitionName: competitionById(fx.league.id)?.name ?? fx.league.name,
-    round: fx.league.round,
-    date: fx.fixture.date,
-    opponent: other.name,
-    opponentLogo: other.logo,
-    home,
-  };
+function readScoreboard(payload: unknown): CachedMatch[] {
+  const events = (payload as { events?: RawEvent[] })?.events ?? [];
+  const matches: CachedMatch[] = [];
+
+  for (const event of events) {
+    const competitors = event?.competitions?.[0]?.competitors ?? [];
+    const home = readSide(competitors.find((c) => c.homeAway === "home"));
+    const away = readSide(competitors.find((c) => c.homeAway === "away"));
+    if (!home || !away || !event.date) continue;
+
+    const type = event.status?.type;
+    matches.push({
+      id: String(event.id ?? `${event.date}-${home.id}-${away.id}`),
+      date: event.date,
+      round: event.season?.slug ?? "",
+      done: type?.completed === true,
+      // Anything neither finished nor scheduled (postponed, abandoned, live) is
+      // left out of both lists until it resolves.
+      upcoming: type?.state === "pre",
+      home,
+      away,
+    });
+  }
+  return matches;
+}
+
+async function competitionMatches(
+  competition: Competition,
+): Promise<{ data: CachedMatch[]; at: number; error: string | null }> {
+  const window = seasonWindow(TRACK_SEASON);
+  return swr(`espn:${competition.slug}:${window}`, FIXTURES_TTL, async () =>
+    readScoreboard(
+      await espn(
+        `${ESPN_SITE}/${competition.slug}/scoreboard?dates=${window}&limit=1000`,
+      ),
+    ),
+  );
 }
 
 function emptyScore(teamId: number): TeamScore {
@@ -347,53 +328,30 @@ export type ResultsBundle = {
 };
 
 /**
- * One request per team returns that club's whole season across every
- * competition it plays in; we then keep only the six we track.
+ * One request per competition covers the whole season for every club in it, so
+ * the cost is six calls regardless of how many teams are being tracked.
  */
 export async function getResults(teams: Team[]): Promise<ResultsBundle> {
   const scores: Record<number, TeamScore> = {};
-  for (const team of teams) scores[team.id] = emptyScore(team.id);
+  const wanted = new Set<number>();
+  for (const team of teams) {
+    scores[team.id] = emptyScore(team.id);
+    wanted.add(team.id);
+  }
 
   const played: PlayedMatch[] = [];
   const upcoming: UpcomingMatch[] = [];
   const notices: string[] = [];
 
-  if (!hasApiKey()) {
-    notices.push(
-      "Results tracking is idle until API_FOOTBALL_KEY is set, so every team sits on zero.",
-    );
-    return {
-      scores,
-      played,
-      upcoming,
-      source: "placeholder",
-      lastUpdated: Date.now(),
-      notices,
-    };
-  }
-
-  const seen = new Set<number>();
-  const unique = teams.filter((team) => {
-    if (seen.has(team.id)) return false;
-    seen.add(team.id);
-    return true;
-  });
-
-  // In parallel: seven clubs is well inside the provider's per-minute ceiling,
-  // and doing them one at a time risks the serverless timeout on a cold cache.
   const fetched = await Promise.all(
-    unique.map(async (team) => {
+    COMPETITIONS.map(async (competition) => {
       try {
-        const { data, at, error } = await swr(
-          `fixtures:${team.id}:${TRACK_SEASON}`,
-          FIXTURES_TTL,
-          () => apiFootball<RawFixture>("/fixtures", { team: team.id, season: TRACK_SEASON }),
-        );
-        return { team, data, at, error, ok: true as const };
+        const result = await competitionMatches(competition);
+        return { competition, ...result, ok: true as const };
       } catch (err) {
         return {
-          team,
-          data: [] as RawFixture[],
+          competition,
+          data: [] as CachedMatch[],
           at: 0,
           error: err instanceof Error ? err.message : String(err),
           ok: false as const,
@@ -407,25 +365,66 @@ export async function getResults(teams: Team[]): Promise<ResultsBundle> {
 
   for (const result of fetched) {
     if (!result.ok) {
-      notices.push(`Could not load fixtures for ${result.team.name}: ${result.error}`);
+      notices.push(`Could not load ${result.competition.name}: ${result.error}`);
       continue;
     }
     anyLive = true;
     oldest = Math.min(oldest, result.at);
     if (result.error) {
-      notices.push(`${result.team.name}: serving cached fixtures (${result.error})`);
+      notices.push(`${result.competition.name}: serving cached fixtures (${result.error})`);
     }
 
-    for (const fx of result.data) {
-      if (!isTracked(fx.league.id)) continue;
-      const status = fx.fixture.status.short;
-      if (VOID.has(status)) continue;
+    for (const match of result.data) {
+      for (const [side, other] of [
+        [match.home, match.away],
+        [match.away, match.home],
+      ] as const) {
+        if (!wanted.has(side.id)) continue;
+        const home = side.id === match.home.id;
 
-      if (FINISHED.has(status)) {
-        const match = toPlayed(fx, result.team.id);
-        if (match) played.push(match);
-      } else {
-        upcoming.push(toUpcoming(fx, result.team.id));
+        if (match.done && side.score !== null && other.score !== null) {
+          const { outcome, viaPenalties } = outcomeFor({
+            teamId: side.id,
+            homeId: match.home.id,
+            goalsHome: match.home.score ?? 0,
+            goalsAway: match.away.score ?? 0,
+            penaltyHome: match.home.pens,
+            penaltyAway: match.away.pens,
+          });
+          played.push({
+            fixtureId: Number(match.id) || 0,
+            teamId: side.id,
+            competitionId: result.competition.id,
+            competitionName: result.competition.name,
+            round: match.round,
+            date: match.date,
+            opponent: other.name,
+            opponentLogo: other.logo,
+            home,
+            goalsFor: side.score,
+            goalsAgainst: other.score,
+            outcome,
+            viaPenalties,
+            points: matchPoints({
+              competitionId: result.competition.id,
+              outcome,
+              goalsFor: side.score,
+              goalsAgainst: other.score,
+            }),
+          });
+        } else if (match.upcoming) {
+          upcoming.push({
+            fixtureId: Number(match.id) || 0,
+            teamId: side.id,
+            competitionId: result.competition.id,
+            competitionName: result.competition.name,
+            round: match.round,
+            date: match.date,
+            opponent: other.name,
+            opponentLogo: other.logo,
+            home,
+          });
+        }
       }
     }
   }
@@ -442,7 +441,7 @@ export async function getResults(teams: Team[]): Promise<ResultsBundle> {
     if (match.outcome === "W") score.wins += 1;
     else if (match.outcome === "D") score.draws += 1;
     else score.losses += 1;
-    const key = competitionById(match.competitionId)?.key ?? String(match.competitionId);
+    const key = competitionKey(match.competitionId);
     score.byCompetition[key] = (score.byCompetition[key] ?? 0) + match.points;
     score.form.push(match.outcome);
   }
@@ -463,38 +462,43 @@ export async function getResults(teams: Team[]): Promise<ResultsBundle> {
   };
 }
 
-/** Drops the cached fixture pages so the next read refetches from the provider. */
-export async function invalidateResults(teams: Team[]): Promise<void> {
-  const store = getStore();
-  await Promise.all(teams.map((t) => store.cacheDrop(`fixtures:${t.id}:${TRACK_SEASON}`)));
+function competitionKey(competitionId: number): string {
+  return COMPETITIONS.find((c) => c.id === competitionId)?.key ?? String(competitionId);
 }
 
-/** Debug helper behind /api/leagues: confirms the six league ids on your plan. */
-export async function lookupLeagues(search?: string): Promise<unknown> {
-  if (search) return apiFootball<unknown>("/leagues", { search });
+/** Drops the cached scoreboards so the next read refetches from ESPN. */
+export async function invalidateResults(): Promise<void> {
+  const store = getStore();
+  const window = seasonWindow(TRACK_SEASON);
+  await Promise.all(
+    COMPETITIONS.map((c) => store.cacheDrop(`espn:${c.slug}:${window}`)),
+  );
+}
 
-  const found: unknown[] = [];
-  for (const comp of COMPETITIONS) {
-    try {
-      const rows = await apiFootball<{
-        league: { id: number; name: string };
-        country: { name: string };
-      }>("/leagues", { id: comp.id });
-      const hit = rows[0];
-      found.push({
-        configured: comp.name,
-        id: comp.id,
-        providerName: hit?.league?.name ?? null,
-        country: hit?.country?.name ?? null,
-        ok: Boolean(hit),
-      });
-    } catch (err) {
-      found.push({
-        configured: comp.name,
-        id: comp.id,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-  return found;
+/** Setup helper behind /api/leagues: checks all six slugs actually resolve. */
+export async function checkCompetitions(): Promise<unknown> {
+  const window = seasonWindow(TRACK_SEASON);
+  return Promise.all(
+    COMPETITIONS.map(async (c) => {
+      try {
+        const payload = (await espn(
+          `${ESPN_SITE}/${c.slug}/scoreboard?dates=${window}&limit=1000`,
+        )) as { leagues?: { name?: string }[]; events?: unknown[] };
+        return {
+          name: c.name,
+          slug: c.slug,
+          ok: true,
+          providerName: payload?.leagues?.[0]?.name ?? null,
+          fixtures: payload?.events?.length ?? 0,
+        };
+      } catch (err) {
+        return {
+          name: c.name,
+          slug: c.slug,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }),
+  );
 }

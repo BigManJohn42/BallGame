@@ -1,17 +1,19 @@
 /**
- * API-Football (v3) league ids for the six competitions we track.
- * Every id can be overridden with an env var in case the provider renumbers one.
+ * The six competitions we track, keyed by ESPN's league slugs.
+ *
+ * `id` is our own stable internal number (it is what travels through scoring
+ * and the UI); `slug` is what ESPN's API actually wants in a URL. Both the slug
+ * and the points values can be overridden with env vars.
  */
 
-function envInt(name: string, fallback: number): number {
+function envStr(name: string, fallback: string): string {
   const raw = process.env[name];
-  if (!raw) return fallback;
-  const n = Number.parseInt(raw, 10);
-  return Number.isFinite(n) ? n : fallback;
+  return raw && raw.trim() ? raw.trim() : fallback;
 }
 
 export type Competition = {
   id: number;
+  slug: string;
   key: string;
   name: string;
   short: string;
@@ -23,7 +25,8 @@ export type Competition = {
 
 export const COMPETITIONS: Competition[] = [
   {
-    id: envInt("LEAGUE_ID_SERIE_A", 135),
+    id: 1,
+    slug: envStr("LEAGUE_SLUG_SERIE_A", "ita.1"),
     key: "serie-a",
     name: "Serie A",
     short: "SA",
@@ -32,7 +35,8 @@ export const COMPETITIONS: Competition[] = [
     accent: "#3b82f6",
   },
   {
-    id: envInt("LEAGUE_ID_CHAMPIONS_LEAGUE", 2),
+    id: 2,
+    slug: envStr("LEAGUE_SLUG_CHAMPIONS_LEAGUE", "uefa.champions"),
     key: "ucl",
     name: "Champions League",
     short: "UCL",
@@ -41,7 +45,8 @@ export const COMPETITIONS: Competition[] = [
     accent: "#818cf8",
   },
   {
-    id: envInt("LEAGUE_ID_EUROPA_LEAGUE", 3),
+    id: 3,
+    slug: envStr("LEAGUE_SLUG_EUROPA_LEAGUE", "uefa.europa"),
     key: "uel",
     name: "Europa League",
     short: "UEL",
@@ -50,7 +55,8 @@ export const COMPETITIONS: Competition[] = [
     accent: "#fb923c",
   },
   {
-    id: envInt("LEAGUE_ID_CONFERENCE_LEAGUE", 848),
+    id: 4,
+    slug: envStr("LEAGUE_SLUG_CONFERENCE_LEAGUE", "uefa.europa.conf"),
     key: "uecl",
     name: "Conference League",
     short: "UECL",
@@ -59,7 +65,8 @@ export const COMPETITIONS: Competition[] = [
     accent: "#34d399",
   },
   {
-    id: envInt("LEAGUE_ID_COPPA_ITALIA", 137),
+    id: 5,
+    slug: envStr("LEAGUE_SLUG_COPPA_ITALIA", "ita.coppa_italia"),
     key: "coppa",
     name: "Coppa Italia",
     short: "CI",
@@ -68,7 +75,8 @@ export const COMPETITIONS: Competition[] = [
     accent: "#f472b6",
   },
   {
-    id: envInt("LEAGUE_ID_SUPERCOPPA", 547),
+    id: 6,
+    slug: envStr("LEAGUE_SLUG_SUPERCOPPA", "ita.super_cup"),
     key: "supercoppa",
     name: "Supercoppa Italiana",
     short: "SC",
@@ -84,9 +92,5 @@ export function competitionById(id: number): Competition | undefined {
   return BY_ID.get(id);
 }
 
-export function isTracked(leagueId: number): boolean {
-  return BY_ID.has(leagueId);
-}
-
-/** Serie A id, used for the draw standings. */
-export const SERIE_A_ID = COMPETITIONS[0].id;
+/** Serie A, the competition the draw pool is taken from. */
+export const SERIE_A = COMPETITIONS[0];
