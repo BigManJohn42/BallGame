@@ -47,9 +47,22 @@ export type UpcomingMatch = {
   home: boolean;
 };
 
+export type Award = {
+  key: string;
+  label: string;
+  detail: string;
+  points: number;
+  /** Still contestable — the season is not over, so this can be taken away. */
+  provisional: boolean;
+};
+
 export type TeamScore = {
   teamId: number;
+  /** matchPoints + bonusPoints. */
   points: number;
+  matchPoints: number;
+  bonusPoints: number;
+  awards: Award[];
   played: number;
   wins: number;
   draws: number;
@@ -92,6 +105,11 @@ export type GameState = {
       accent: string;
     }[];
     bonuses: { goal: number; cleanSheet: number };
+    awardCatalogue: {
+      stat: { label: string; points: number }[];
+      rounds: { label: string; points: number }[];
+      finish: { label: string; points: number }[];
+    };
     notices: string[];
   };
 };

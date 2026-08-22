@@ -306,6 +306,9 @@ function emptyScore(teamId: number): TeamScore {
   return {
     teamId,
     points: 0,
+    matchPoints: 0,
+    bonusPoints: 0,
+    awards: [],
     played: 0,
     wins: 0,
     draws: 0,
@@ -433,6 +436,7 @@ export async function getResults(teams: Team[]): Promise<ResultsBundle> {
   for (const match of played) {
     const score = scores[match.teamId];
     if (!score) continue;
+    score.matchPoints += match.points;
     score.points += match.points;
     score.played += 1;
     score.goalsFor += match.goalsFor;
@@ -464,6 +468,190 @@ export async function getResults(teams: Team[]): Promise<ResultsBundle> {
 
 function competitionKey(competitionId: number): string {
   return COMPETITIONS.find((c) => c.id === competitionId)?.key ?? String(competitionId);
+}
+
+/* ----------------------------------------------------------- stat leaders */
+
+const ESPN_CORE_V2 = "https://sports.core.api.espn.com/v2/sports/soccer/leagues";
+const LEADERS_TTL = envInt("LEADERS_TTL", 60 * 60 * 12);
+
+export type StatLine = {
+  athleteId: string;
+  teamId: number;
+  value: number;
+};
+
+/** goals / assists / saves, per athlete, summed across the six competitions. */
+export type LeaderBoards = {
+  goals: StatLine[];
+  assists: StatLine[];
+  saves: StatLine[];
+  available: boolean;
+  notices: string[];
+};
+
+const CATEGORY_MAP: Record<string, keyof Omit<LeaderBoards, "available" | "notices">> = {
+  goals: "goals",
+  goalsLeaders: "goals",
+  assists: "assists",
+  assistsLeaders: "assists",
+  saves: "saves",
+};
+
+type RawLeaderCategory = {
+  name?: string;
+  leaders?: {
+    value?: number;
+    athlete?: { $ref?: string };
+    team?: { $ref?: string };
+  }[];
+};
+
+function idFromRef(ref: string | undefined, kind: "athletes" | "teams"): string | null {
+  const m = ref?.match(new RegExp(`/${kind}/(\\d+)`));
+  return m ? m[1] : null;
+}
+
+function readLeaders(payload: unknown): Record<string, StatLine[]> {
+  const categories = (payload as { categories?: RawLeaderCategory[] })?.categories ?? [];
+  const out: Record<string, StatLine[]> = { goals: [], assists: [], saves: [] };
+  const seen = new Set<string>();
+
+  for (const category of categories) {
+    const bucket = category.name ? CATEGORY_MAP[category.name] : undefined;
+    if (!bucket) continue;
+    for (const entry of category.leaders ?? []) {
+      const athleteId = idFromRef(entry.athlete?.$ref, "athletes");
+      const teamId = Number(idFromRef(entry.team?.$ref, "teams"));
+      const value = entry.value;
+      if (!athleteId || !Number.isFinite(teamId) || typeof value !== "number") continue;
+      // "goals" and "goalsLeaders" are the same list under two names.
+      const dedupe = `${bucket}:${athleteId}`;
+      if (seen.has(dedupe)) continue;
+      seen.add(dedupe);
+      out[bucket].push({ athleteId, teamId, value });
+    }
+  }
+  return out;
+}
+
+/**
+ * Top 25 per category per competition, summed per athlete. ESPN publishes
+ * nothing until a season is under way, so a 404 here is normal in August and
+ * simply means no stat awards are live yet.
+ */
+export async function getLeaders(): Promise<LeaderBoards> {
+  const totals: Record<string, Map<string, StatLine>> = {
+    goals: new Map(),
+    assists: new Map(),
+    saves: new Map(),
+  };
+  const notices: string[] = [];
+  let available = false;
+
+  const fetched = await Promise.all(
+    COMPETITIONS.map(async (competition) => {
+      try {
+        const { data } = await swr(
+          `leaders:${competition.slug}:${TRACK_SEASON}`,
+          LEADERS_TTL,
+          async () =>
+            readLeaders(
+              await espn(
+                `${ESPN_CORE_V2}/${competition.slug}/seasons/${TRACK_SEASON}/types/1/leaders`,
+              ),
+            ),
+        );
+        return { competition, data, ok: true as const };
+      } catch (err) {
+        return {
+          competition,
+          data: null,
+          ok: false as const,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }),
+  );
+
+  for (const result of fetched) {
+    if (!result.ok || !result.data) continue;
+    available = true;
+    for (const bucket of ["goals", "assists", "saves"] as const) {
+      for (const line of result.data[bucket] ?? []) {
+        const running = totals[bucket].get(line.athleteId);
+        if (running) {
+          running.value += line.value;
+          running.teamId = line.teamId;
+        } else {
+          totals[bucket].set(line.athleteId, { ...line });
+        }
+      }
+    }
+  }
+
+  if (!available) {
+    notices.push(
+      `No player statistics published for ${seasonLabel(
+        TRACK_SEASON,
+      )} yet, so the stat awards are not live. They appear once the season is under way.`,
+    );
+  }
+
+  const sorted = (m: Map<string, StatLine>) =>
+    [...m.values()].sort((a, b) => b.value - a.value);
+
+  return {
+    goals: sorted(totals.goals),
+    assists: sorted(totals.assists),
+    saves: sorted(totals.saves),
+    available,
+    notices,
+  };
+}
+
+/** Resolves an athlete id to a display name. One small cached request each. */
+export async function athleteName(athleteId: string): Promise<string> {
+  try {
+    const { data } = await swr(
+      `athlete:${athleteId}`,
+      60 * 60 * 24 * 30,
+      async () => {
+        const payload = (await espn(
+          `${ESPN_CORE_V2}/${SERIE_A.slug}/seasons/${TRACK_SEASON}/athletes/${athleteId}`,
+        )) as { displayName?: string; fullName?: string };
+        return payload?.displayName ?? payload?.fullName ?? "";
+      },
+    );
+    return data || "a player";
+  } catch {
+    return "a player";
+  }
+}
+
+/* --------------------------------------------------------- league position */
+
+/** The live Serie A table for the tracked season, for finishing-place bonuses. */
+export async function getLeagueTable(): Promise<{
+  positions: Record<number, number>;
+  complete: boolean;
+  available: boolean;
+}> {
+  try {
+    const { data } = await swr(
+      `standings:${SERIE_A.slug}:${TRACK_SEASON}`,
+      STANDINGS_TTL,
+      async () =>
+        readStandings(
+          await espn(`${ESPN_CORE}/${SERIE_A.slug}/standings?season=${TRACK_SEASON}`),
+        ),
+    );
+    const positions: Record<number, number> = {};
+    for (const team of data) positions[team.id] = team.rank;
+    return { positions, complete: false, available: data.length > 0 };
+  } catch {
+    return { positions: {}, complete: false, available: false };
+  }
 }
 
 /** Drops the cached scoreboards so the next read refetches from ESPN. */

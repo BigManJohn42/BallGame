@@ -37,6 +37,52 @@ export default function ScoringPanel({ meta }: { meta: GameState["meta"] }) {
           </div>
         </div>
       </div>
+      <div className="rules-grid">
+        <div className="panel rules">
+          <div className="rule-head">Statistical awards</div>
+          {meta.awardCatalogue.stat.map((a) => (
+            <div className="rule-row" key={a.label}>
+              <div className="rule-name">{a.label}</div>
+              <div className="rule-values">
+                <b>+{a.points}</b>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="panel rules">
+          <div className="rule-head">Cup progress</div>
+          {meta.awardCatalogue.rounds.map((a) => (
+            <div className="rule-row" key={a.label}>
+              <div className="rule-name">{a.label}</div>
+              <div className="rule-values">
+                <b>+{a.points}</b>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="panel rules">
+          <div className="rule-head">Serie A finish</div>
+          {meta.awardCatalogue.finish.map((a) => (
+            <div className="rule-row" key={a.label}>
+              <div className="rule-name">{a.label}</div>
+              <div className="rule-values">
+                <b>+{a.points}</b>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="footnote">
+        The three European competitions score identically — a club does not choose which one
+        it plays in, so rewarding one above another would just be a second prize for last
+        season. Statistical awards are contested <strong>between the clubs in this game</strong>,
+        not against all of Europe, and only the highest cup round reached is paid out rather
+        than every round along the way. Anything still contestable is shown faded and can be
+        taken away again before the season ends.
+      </p>
       <p className="footnote">
         A tie settled on penalties counts as a win for whoever went through, not a draw.
         Postponed and abandoned games are ignored until they are actually played. Ties on

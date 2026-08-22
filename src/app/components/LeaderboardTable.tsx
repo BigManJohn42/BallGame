@@ -25,6 +25,8 @@ export default function LeaderboardTable({
             <th className="rank">#</th>
             <th>Player</th>
             <th className="num">Pts</th>
+            <th className="num">Match</th>
+            <th className="num">Bonus</th>
             <th className="num">P</th>
             <th className="num">W-D-L</th>
             <th className="num">GF-GA</th>
@@ -45,10 +47,27 @@ export default function LeaderboardTable({
                       {row.player.id === meId ? " (you)" : ""}
                     </div>
                     <div className="player-team">{row.player.teamName}</div>
+                    {row.score.awards.length ? (
+                      <div className="award-row">
+                        {row.score.awards.map((a) => (
+                          <span
+                            className={`award${a.provisional ? " award-provisional" : ""}`}
+                            key={a.key}
+                            title={`${a.detail} · +${a.points}`}
+                          >
+                            {a.label} +{a.points}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </td>
               <td className="num points">{row.score.points}</td>
+              <td className="num subtle">{row.score.matchPoints}</td>
+              <td className="num subtle">
+                {row.score.bonusPoints ? `+${row.score.bonusPoints}` : "—"}
+              </td>
               <td className="num">{row.score.played}</td>
               <td className="num">
                 {row.score.wins}-{row.score.draws}-{row.score.losses}

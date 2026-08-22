@@ -1,3 +1,4 @@
+import { awardCatalogue, computeAwards } from "./awards";
 import { COMPETITIONS } from "./competitions";
 import {
   DRAW_SEASON,
@@ -8,7 +9,7 @@ import {
 } from "./football";
 import { CLEAN_SHEET_BONUS, GOAL_BONUS } from "./scoring";
 import { getStore } from "./store";
-import type { GameState, LeaderboardRow, Player, Team, TeamScore } from "./types";
+import type { Award, GameState, LeaderboardRow, Player, Team, TeamScore } from "./types";
 
 export const MAX_NAME_LENGTH = 24;
 
@@ -48,6 +49,9 @@ function emptyScore(teamId: number): TeamScore {
   return {
     teamId,
     points: 0,
+    matchPoints: 0,
+    bonusPoints: 0,
+    awards: [],
     played: 0,
     wins: 0,
     draws: 0,
@@ -116,6 +120,32 @@ export async function getGameState(me: Player | null): Promise<GameState> {
   }
 
   const results = await getResults([...tracked.values()]);
+
+  // Bonus awards sit on top of match points: stat titles, cup runs, and where
+  // the club sits in Serie A.
+  const trackedTeams = [...tracked.values()];
+  const bonus = await computeAwards({
+    teams: trackedTeams,
+    played: results.played,
+    upcoming: results.upcoming,
+    scores: results.scores,
+  }).catch((err: unknown) => {
+    return {
+      awards: {} as Record<number, Award[]>,
+      notices: [
+        `Bonus awards unavailable: ${err instanceof Error ? err.message : String(err)}`,
+      ],
+    };
+  });
+
+  for (const team of trackedTeams) {
+    const score = results.scores[team.id];
+    if (!score) continue;
+    score.awards = bonus.awards[team.id] ?? [];
+    score.bonusPoints = score.awards.reduce((n, a) => n + a.points, 0);
+    score.points = score.matchPoints + score.bonusPoints;
+  }
+
   const leaderboard = buildLeaderboard(players, results.scores);
 
   // Show only clubs somebody actually holds once the game has started; before
@@ -123,7 +153,7 @@ export async function getGameState(me: Player | null): Promise<GameState> {
   const owned = new Set(players.map((p) => p.teamId));
   const inFeed = (teamId: number) => owned.size === 0 || owned.has(teamId);
 
-  const notices = [...storeErrors, ...pool.notices, ...results.notices];
+  const notices = [...storeErrors, ...pool.notices, ...results.notices, ...bonus.notices];
   if (store.kind === "memory") {
     notices.push(
       "No Redis connected: players and scores live in memory only and will vanish between deploys. Add an Upstash/Vercel KV store for real persistence.",
@@ -153,6 +183,7 @@ export async function getGameState(me: Player | null): Promise<GameState> {
         accent: c.accent,
       })),
       bonuses: { goal: GOAL_BONUS, cleanSheet: CLEAN_SHEET_BONUS },
+      awardCatalogue: awardCatalogue(),
       notices,
     },
   };
