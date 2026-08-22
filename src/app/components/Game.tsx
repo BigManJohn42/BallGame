@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import ClubPanel from "./ClubPanel";
+import DerbyBar from "./DerbyBar";
 import LeaderboardTable from "./LeaderboardTable";
 import LeagueTable from "./LeagueTable";
 import LiveNow from "./LiveNow";
@@ -299,6 +300,13 @@ export default function Game({ initial }: { initial: GameState }) {
                 <img src={team.logo} alt="" loading="lazy" />
                 {team.name}
                 <b>{ordinal(team.rank)}</b>
+                <button
+                  className="pool-view"
+                  onClick={() => setOpenClub(team.id)}
+                  aria-label={`View `}
+                >
+                  View
+                </button>
               </span>
             ))}
           </div>
@@ -311,6 +319,8 @@ export default function Game({ initial }: { initial: GameState }) {
           {status}
         </p>
       ) : null}
+
+      <DerbyBar derbies={state.derbies} onPick={setOpenClub} />
 
       {/* Live matches sit above the tabs: if something is being played right
           now, it is the most interesting thing on the page whatever tab you are

@@ -1,10 +1,13 @@
 import { awardCatalogue, computeAwards } from "./awards";
+import { clubProfile } from "./clubs";
 import { COMPETITIONS } from "./competitions";
+import { findDerbies } from "./derbies";
 import {
   DRAW_SEASON,
   TRACK_SEASON,
   getDrawPool,
   getFullTable,
+  getPlayerBoards,
   getResults,
   seasonLabel,
 } from "./football";
@@ -19,6 +22,7 @@ import { CLEAN_SHEET_BONUS, GOAL_BONUS } from "./scoring";
 import { buildSummary } from "./summary";
 import { getStore } from "./store";
 import type {
+  Derby,
   Award,
   ClubSeason,
   GameState,
@@ -232,6 +236,13 @@ async function assembleSeason() {
     .then((t) => t.rows)
     .catch(() => [] as LeagueRow[]);
 
+  const derbies = findDerbies({
+    upcoming: results.upcoming,
+    owners: new Map(players.map((p) => [p.teamId, p.name])),
+    competitionName: (id) => COMPETITIONS.find((c) => c.id === id)?.name ?? "",
+    now: Date.now(),
+  });
+
   const notices = [...storeErrors, ...pool.notices, ...results.notices, ...bonus.notices];
   if (store.kind === "memory") {
     notices.push(
@@ -239,13 +250,24 @@ async function assembleSeason() {
     );
   }
 
-  return { store, pool, players, trackedTeams, results, leaderboard, table, summary, notices };
+  return {
+    store,
+    pool,
+    players,
+    trackedTeams,
+    results,
+    leaderboard,
+    table,
+    summary,
+    derbies,
+    notices,
+  };
 }
 
 /** Everything the front page renders, in a single round trip. */
 export async function getGameState(me: Player | null): Promise<GameState> {
   const s = await assembleSeason();
-  const { store, pool, players, results, leaderboard, table, summary, notices } = s;
+  const { store, pool, players, results, leaderboard, table, summary, derbies, notices } = s;
 
   // Show only clubs somebody actually holds once the game has started; before
   // that, show the whole pool so the page is not empty on arrival.
@@ -258,6 +280,7 @@ export async function getGameState(me: Player | null): Promise<GameState> {
     leaderboard,
     table,
     summary,
+    derbies,
     live: results.live,
     recent: results.played.filter((m) => inFeed(m.teamId)).slice(0, 24),
     upcoming: results.upcoming.filter((m) => inFeed(m.teamId)).slice(0, 12),
@@ -298,6 +321,16 @@ export async function getClubSeason(teamId: number): Promise<ClubSeason | null> 
   const holder = players.find((p) => p.teamId === teamId) ?? null;
   const position = table.find((r) => r.teamId === teamId);
 
+  // The club's own best performers, pulled from the same stat leaders that
+  // decide the bonus awards. Failing here must not take the whole view down.
+  const topPlayers = await getPlayerBoards([team])
+    .then(({ boards }) =>
+      boards
+        .filter((b) => b.rows.length > 0)
+        .map((b) => ({ label: b.label, unit: b.unit, rows: b.rows.slice(0, 3) })),
+    )
+    .catch(() => []);
+
   return {
     team,
     owner: holder ? { id: holder.id, name: holder.name } : null,
@@ -306,6 +339,9 @@ export async function getClubSeason(teamId: number): Promise<ClubSeason | null> 
     played: results.played.filter((m) => m.teamId === teamId),
     upcoming: results.upcoming.filter((m) => m.teamId === teamId),
     leaguePosition: position && position.played > 0 ? position.rank : null,
+    leagueRow: position ?? null,
+    profile: clubProfile(teamId),
+    topPlayers,
   };
 }
 

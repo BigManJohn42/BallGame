@@ -73,11 +73,28 @@ deep-linkable by URL hash:
 | **This week** | Who gained, who climbed, result of the week, and a summary you can paste into the group chat |
 | **Rules** | Every scoring value, including the bonuses |
 
-**Any club's full season.** Click a club anywhere and you get every result and every
-remaining fixture across all six competitions, filterable by competition, with the points
-each result earned. It is public: anyone can inspect anyone else's club, no login.
+**A countdown to the next head-to-head** sits at the very top whenever two clubs in the
+game are about to play each other — the fixtures where one player's points come straight
+out of another's. If more than one falls in the same round, the rest are listed alongside.
+
+**Any club's view.** Click a club anywhere — leaderboard, league table, draw pool or the
+countdown — and you get its league position and form, a short history, honours, legends,
+current manager, its best players this season, and every result and remaining fixture
+across all six competitions, filterable by competition. It is public: anyone can inspect
+anyone else's club, no login.
 
 On phones the leaderboard becomes cards rather than a ten-column table.
+
+### About the club profiles
+
+Histories, honours, legends and managers are **written by hand** in
+[src/lib/clubs.ts](src/lib/clubs.ts) — no free API serves them. Everything else in the club
+view is live.
+
+The manager is the only field that goes stale on its own. Correct one without editing code
+by setting `MANAGERS="110:Some Name,114:Another Name"` in the environment; the ids are ESPN
+team ids. If the draw pool ever changes to a club with no profile written, the view simply
+omits that section rather than breaking.
 
 ## Setup
 
