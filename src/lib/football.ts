@@ -1,7 +1,14 @@
 import { COMPETITIONS, SERIE_A, type Competition } from "./competitions";
 import { matchPoints, outcomeFor } from "./scoring";
 import { getStore } from "./store";
-import type { DataSource, PlayedMatch, Team, TeamScore, UpcomingMatch } from "./types";
+import type {
+  DataSource,
+  LeagueRow,
+  PlayedMatch,
+  Team,
+  TeamScore,
+  UpcomingMatch,
+} from "./types";
 
 /**
  * Data comes from ESPN's public soccer API: no key, no quota, and it covers all
@@ -118,10 +125,15 @@ type StandingsEntry = {
     shortDisplayName?: string;
     logos?: { href?: string }[];
   };
+  note?: { description?: string; color?: string };
   stats?: { name?: string; value?: number }[];
 };
 
-function readStandings(payload: unknown): Team[] {
+/**
+ * ESPN names soccer stats after American sports: `pointsFor` is goals scored,
+ * `ties` is draws, and `points` is the league points total.
+ */
+function readTable(payload: unknown): LeagueRow[] {
   const root = payload as {
     children?: { standings?: { entries?: StandingsEntry[] } }[];
     standings?: { entries?: StandingsEntry[] };
@@ -129,20 +141,58 @@ function readStandings(payload: unknown): Team[] {
   const entries =
     root?.children?.[0]?.standings?.entries ?? root?.standings?.entries ?? [];
 
-  const teams: Team[] = [];
+  const rows: LeagueRow[] = [];
   for (const entry of entries) {
     const id = Number(entry?.team?.id);
     if (!Number.isFinite(id)) continue;
-    const rank = entry?.stats?.find((s) => s.name === "rank")?.value;
-    teams.push({
-      id,
+    const stat = (name: string): number => {
+      const v = entry.stats?.find((s) => s.name === name)?.value;
+      return typeof v === "number" ? v : 0;
+    };
+    const rank = entry.stats?.find((s) => s.name === "rank")?.value;
+    rows.push({
+      rank: typeof rank === "number" ? rank : rows.length + 1,
+      teamId: id,
       name: entry.team?.displayName ?? entry.team?.shortDisplayName ?? `Team ${id}`,
       logo: entry.team?.logos?.[0]?.href ?? logoFor(id),
-      rank: typeof rank === "number" ? rank : teams.length + 1,
+      played: stat("gamesPlayed"),
+      wins: stat("wins"),
+      draws: stat("ties"),
+      losses: stat("losses"),
+      goalsFor: stat("pointsFor"),
+      goalsAgainst: stat("pointsAgainst"),
+      goalDifference: stat("pointDifferential"),
+      points: stat("points"),
+      zone: entry.note?.description ?? null,
+      zoneColor: entry.note?.color ?? null,
     });
   }
   // ESPN normally returns these in order, but do not rely on it.
-  return teams.sort((a, b) => a.rank - b.rank);
+  return rows.sort((a, b) => a.rank - b.rank);
+}
+
+function rowsToTeams(rows: LeagueRow[]): Team[] {
+  return rows.map((r) => ({ id: r.teamId, name: r.name, logo: r.logo, rank: r.rank }));
+}
+
+const TABLE_TTL = envInt("TABLE_TTL", 60 * 60 * 3);
+
+/**
+ * The full Serie A table. The completed draw season never changes so it is held
+ * for a day; the live one refreshes every few hours to follow each gameweek.
+ */
+export async function getFullTable(season: number): Promise<{
+  rows: LeagueRow[];
+  at: number;
+  error: string | null;
+}> {
+  const { data, at, error } = await swr(
+    `table:${SERIE_A.slug}:${season}`,
+    season === DRAW_SEASON ? STANDINGS_TTL : TABLE_TTL,
+    async () =>
+      readTable(await espn(`${ESPN_CORE}/${SERIE_A.slug}/standings?season=${season}`)),
+  );
+  return { rows: data, at, error };
 }
 
 function parseOverride(): Team[] | null {
@@ -180,14 +230,8 @@ export async function getDrawPool(): Promise<{
 
   const notices: string[] = [];
   try {
-    const { data, error } = await swr(
-      `standings:${SERIE_A.slug}:${DRAW_SEASON}`,
-      STANDINGS_TTL,
-      async () =>
-        readStandings(
-          await espn(`${ESPN_CORE}/${SERIE_A.slug}/standings?season=${DRAW_SEASON}`),
-        ),
-    );
+    const { rows, error } = await getFullTable(DRAW_SEASON);
+    const data = rowsToTeams(rows);
     if (error) notices.push(`Standings served from cache: ${error}`);
     if (data.length >= TOP_N) {
       return { teams: data.slice(0, TOP_N), source: "live", notices };
@@ -631,26 +675,23 @@ export async function athleteName(athleteId: string): Promise<string> {
 
 /* --------------------------------------------------------- league position */
 
-/** The live Serie A table for the tracked season, for finishing-place bonuses. */
+/**
+ * Positions in the tracked season, for finishing-place bonuses. Shares the
+ * cached table with the standings the page renders, so it costs no extra call.
+ */
 export async function getLeagueTable(): Promise<{
   positions: Record<number, number>;
-  complete: boolean;
   available: boolean;
 }> {
   try {
-    const { data } = await swr(
-      `standings:${SERIE_A.slug}:${TRACK_SEASON}`,
-      STANDINGS_TTL,
-      async () =>
-        readStandings(
-          await espn(`${ESPN_CORE}/${SERIE_A.slug}/standings?season=${TRACK_SEASON}`),
-        ),
-    );
+    const { rows } = await getFullTable(TRACK_SEASON);
     const positions: Record<number, number> = {};
-    for (const team of data) positions[team.id] = team.rank;
-    return { positions, complete: false, available: data.length > 0 };
+    // Nobody has a meaningful position before a ball is kicked.
+    const started = rows.some((r) => r.played > 0);
+    if (started) for (const row of rows) positions[row.teamId] = row.rank;
+    return { positions, available: started && rows.length > 0 };
   } catch {
-    return { positions: {}, complete: false, available: false };
+    return { positions: {}, available: false };
   }
 }
 

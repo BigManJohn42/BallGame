@@ -62,6 +62,16 @@ Bonuses that are still contestable show faded on the leaderboard and can be lost
 before the season ends. Every number above is an environment variable, so you can rebalance
 the whole game without touching code — see [.env.example](.env.example).
 
+## What's on the page
+
+- **Leaderboard** — the players, their clubs, and points split into match and bonus.
+- **The real Serie A table**, separate from the leaderboard and updating as gameweeks are
+  played. Qualification and relegation bands are colour-coded, and the clubs somebody holds
+  are highlighted and clickable.
+- **Any club's full season.** Click a club anywhere and you get every result and every
+  remaining fixture across all six competitions, filterable by competition, with the points
+  each result earned. It is public: anyone can inspect anyone else's club, no login.
+
 ## Setup
 
 ### 1. Deploy
@@ -136,6 +146,7 @@ Set `TRACK_SEASON=2025` and it scores the completed 2025/26 season instead.
 | `POST /api/leave`         | Gives up your club and frees your name                          |
 | `POST /api/refresh`       | Forces a re-read of results, rate limited to once a minute      |
 | `GET /api/cron`           | Daily warm-up, wired in `vercel.json`                           |
+| `GET /api/club/{teamId}`  | One club's whole season — every result and fixture. Public       |
 | `GET /api/leagues`        | Health check: confirms all six ESPN slugs still resolve         |
 
 Players are identified by an opaque token in an httpOnly cookie — no passwords, no

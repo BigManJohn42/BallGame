@@ -82,10 +82,41 @@ export type LeaderboardRow = {
 
 export type DataSource = "live" | "override" | "placeholder";
 
+/** One row of the real Serie A table, independent of who is playing the game. */
+export type LeagueRow = {
+  rank: number;
+  teamId: number;
+  name: string;
+  logo: string;
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+  /** e.g. "Champions League", "Relegation" — ESPN's qualification band. */
+  zone: string | null;
+  zoneColor: string | null;
+};
+
+/** A single club's whole season, for the per-player detail view. */
+export type ClubSeason = {
+  team: Team;
+  owner: { id: string; name: string } | null;
+  score: TeamScore;
+  played: PlayedMatch[];
+  upcoming: UpcomingMatch[];
+  leaguePosition: number | null;
+};
+
 export type GameState = {
   me: Player | null;
   teams: Team[];
   leaderboard: LeaderboardRow[];
+  /** The real Serie A table, separate from the player standings. */
+  table: LeagueRow[];
   recent: PlayedMatch[];
   upcoming: UpcomingMatch[];
   meta: {

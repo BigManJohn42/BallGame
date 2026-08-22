@@ -4,12 +4,22 @@ import {
   DRAW_SEASON,
   TRACK_SEASON,
   getDrawPool,
+  getFullTable,
   getResults,
   seasonLabel,
 } from "./football";
 import { CLEAN_SHEET_BONUS, GOAL_BONUS } from "./scoring";
 import { getStore } from "./store";
-import type { Award, GameState, LeaderboardRow, Player, Team, TeamScore } from "./types";
+import type {
+  Award,
+  ClubSeason,
+  GameState,
+  LeaderboardRow,
+  LeagueRow,
+  Player,
+  Team,
+  TeamScore,
+} from "./types";
 
 export const MAX_NAME_LENGTH = 24;
 
@@ -91,8 +101,11 @@ export function buildLeaderboard(
   });
 }
 
-/** Everything the front page renders, in a single round trip. */
-export async function getGameState(me: Player | null): Promise<GameState> {
+/**
+ * Everything the season is made of, unsliced. Both the front page and the
+ * per-club view are built from this, so they can never disagree.
+ */
+async function assembleSeason() {
   const store = getStore();
   const storeErrors: string[] = [];
   const [pool, players] = await Promise.all([
@@ -147,11 +160,9 @@ export async function getGameState(me: Player | null): Promise<GameState> {
   }
 
   const leaderboard = buildLeaderboard(players, results.scores);
-
-  // Show only clubs somebody actually holds once the game has started; before
-  // that, show the whole pool so the page is not empty on arrival.
-  const owned = new Set(players.map((p) => p.teamId));
-  const inFeed = (teamId: number) => owned.size === 0 || owned.has(teamId);
+  const table = await getFullTable(TRACK_SEASON)
+    .then((t) => t.rows)
+    .catch(() => [] as LeagueRow[]);
 
   const notices = [...storeErrors, ...pool.notices, ...results.notices, ...bonus.notices];
   if (store.kind === "memory") {
@@ -160,10 +171,24 @@ export async function getGameState(me: Player | null): Promise<GameState> {
     );
   }
 
+  return { store, pool, players, trackedTeams, results, leaderboard, table, notices };
+}
+
+/** Everything the front page renders, in a single round trip. */
+export async function getGameState(me: Player | null): Promise<GameState> {
+  const s = await assembleSeason();
+  const { store, pool, players, results, leaderboard, table, notices } = s;
+
+  // Show only clubs somebody actually holds once the game has started; before
+  // that, show the whole pool so the page is not empty on arrival.
+  const owned = new Set(players.map((p) => p.teamId));
+  const inFeed = (teamId: number) => owned.size === 0 || owned.has(teamId);
+
   return {
     me,
     teams: pool.teams,
     leaderboard,
+    table,
     recent: results.played.filter((m) => inFeed(m.teamId)).slice(0, 24),
     upcoming: results.upcoming.filter((m) => inFeed(m.teamId)).slice(0, 12),
     meta: {
@@ -189,3 +214,27 @@ export async function getGameState(me: Player | null): Promise<GameState> {
   };
 }
 
+
+/**
+ * One club's entire season — every result and every remaining fixture. Public:
+ * anyone can look up anyone else's club, no cookie required.
+ */
+export async function getClubSeason(teamId: number): Promise<ClubSeason | null> {
+  const { players, trackedTeams, results, table } = await assembleSeason();
+
+  const team = trackedTeams.find((t) => t.id === teamId);
+  if (!team) return null;
+
+  const holder = players.find((p) => p.teamId === teamId) ?? null;
+  const position = table.find((r) => r.teamId === teamId);
+
+  return {
+    team,
+    owner: holder ? { id: holder.id, name: holder.name } : null,
+    score: results.scores[teamId] ?? emptyScore(teamId),
+    // getResults returns played newest-first and upcoming soonest-first.
+    played: results.played.filter((m) => m.teamId === teamId),
+    upcoming: results.upcoming.filter((m) => m.teamId === teamId),
+    leaguePosition: position && position.played > 0 ? position.rank : null,
+  };
+}

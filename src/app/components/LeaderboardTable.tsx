@@ -5,9 +5,11 @@ import type { LeaderboardRow } from "@/lib/types";
 export default function LeaderboardTable({
   rows,
   meId,
+  onPick,
 }: {
   rows: LeaderboardRow[];
   meId: string | null;
+  onPick: (teamId: number) => void;
 }) {
   if (!rows.length) {
     return (
@@ -46,7 +48,12 @@ export default function LeaderboardTable({
                       {row.player.name}
                       {row.player.id === meId ? " (you)" : ""}
                     </div>
-                    <div className="player-team">{row.player.teamName}</div>
+                    <button
+                      className="player-team player-team-link"
+                      onClick={() => onPick(row.player.teamId)}
+                    >
+                      {row.player.teamName} · fixtures &amp; results
+                    </button>
                     {row.score.awards.length ? (
                       <div className="award-row">
                         {row.score.awards.map((a) => (
