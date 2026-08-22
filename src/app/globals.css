@@ -570,6 +570,12 @@ tbody tr.is-me {
   gap: 20px;
 }
 
+/* Grid items default to min-width:auto, so a long unbreakable fixture line
+   stretches the track past the viewport and defeats the ellipsis below. */
+.grid-2 > * {
+  min-width: 0;
+}
+
 .match {
   display: flex;
   align-items: center;
@@ -974,5 +980,227 @@ button.club-link:hover span:first-of-type {
   }
   .overlay {
     padding: 12px 8px;
+  }
+}
+
+/* ------------------------------------------------------ movement & breakdown */
+
+.move {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.move-up {
+  color: var(--accent);
+}
+.move-down {
+  color: var(--danger);
+}
+.move-flat {
+  color: var(--dim);
+}
+
+.move-cell {
+  width: 34px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.gained {
+  margin-left: 8px;
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--accent);
+  border: 1px solid rgba(61, 220, 132, 0.3);
+  background: rgba(61, 220, 132, 0.1);
+  border-radius: 999px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.breakdown {
+  margin-top: 7px;
+  max-width: 320px;
+}
+
+.breakdown-bar {
+  display: flex;
+  height: 4px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.breakdown-bar span {
+  display: block;
+  height: 100%;
+}
+
+.breakdown-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.breakdown-keys span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ------------------------------------------------------------------- live */
+
+.live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f87171;
+  margin-right: 7px;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.5);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 5px rgba(248, 113, 113, 0);
+  }
+}
+
+.live-row {
+  gap: 10px;
+}
+
+.live-team {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--text);
+  text-align: left;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-team:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.live-score {
+  font-size: 16px;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.live-clock {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #f87171;
+  min-width: 38px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ mobile cards */
+
+/* The layout switch owns `display` on these; .cards must not set it or it
+   would win on equal specificity and both layouts would render at once. */
+.only-narrow {
+  display: none;
+}
+
+.cards {
+  gap: 10px;
+}
+
+.card {
+  padding: 14px;
+}
+
+.card.is-me {
+  border-color: rgba(61, 220, 132, 0.35);
+  background: rgba(61, 220, 132, 0.06);
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.card-rank {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 18px;
+}
+
+.card-top img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex: none;
+}
+
+.card-id {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-points {
+  text-align: right;
+  flex: none;
+}
+
+.card-points .value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.card-stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.card-stats b {
+  color: var(--text);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 780px) {
+  .only-wide {
+    display: none;
+  }
+  .only-narrow {
+    display: grid;
   }
 }

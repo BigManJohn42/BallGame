@@ -4,6 +4,7 @@ import { getStore } from "./store";
 import type {
   DataSource,
   LeagueRow,
+  LiveMatch,
   PlayedMatch,
   Team,
   TeamScore,
@@ -284,7 +285,10 @@ type RawEvent = {
   id?: string;
   date?: string;
   season?: { slug?: string };
-  status?: { type?: { state?: string; completed?: boolean } };
+  status?: {
+    displayClock?: string;
+    type?: { state?: string; completed?: boolean; description?: string };
+  };
   competitions?: { competitors?: RawCompetitor[] }[];
 };
 
@@ -369,6 +373,7 @@ export type ResultsBundle = {
   scores: Record<number, TeamScore>;
   played: PlayedMatch[];
   upcoming: UpcomingMatch[];
+  live: LiveMatch[];
   source: DataSource;
   lastUpdated: number;
   notices: string[];
@@ -409,6 +414,8 @@ export async function getResults(teams: Team[]): Promise<ResultsBundle> {
 
   let anyLive = false;
   let oldest = Number.POSITIVE_INFINITY;
+  // Kickoff times for every tracked club's matches, whatever their status.
+  const kickoffTimes: number[] = [];
 
   for (const result of fetched) {
     if (!result.ok) {
@@ -428,6 +435,9 @@ export async function getResults(teams: Team[]): Promise<ResultsBundle> {
       ] as const) {
         if (!wanted.has(side.id)) continue;
         const home = side.id === match.home.id;
+
+        const kickoff = Date.parse(match.date);
+        if (Number.isFinite(kickoff)) kickoffTimes.push(kickoff);
 
         if (match.done && side.score !== null && other.score !== null) {
           const { outcome, viaPenalties } = outcomeFor({
@@ -500,10 +510,24 @@ export async function getResults(teams: Team[]): Promise<ResultsBundle> {
 
   upcoming.sort((a, b) => a.date.localeCompare(b.date));
 
+  // Only reach for live scores when a tracked club could plausibly be on the
+  // pitch: kicking off within the next 15 minutes, or started up to 4 hours ago.
+  //
+  // This deliberately looks at every cached match, not just the upcoming ones.
+  // If the season feed happened to be refreshed mid-match the fixture is neither
+  // finished nor scheduled, so keying off `upcoming` alone would go blind during
+  // exactly the game we want to show.
+  const now = Date.now();
+  const maybeLive = kickoffTimes.some(
+    (kickoff) => kickoff <= now + 15 * 60_000 && kickoff > now - 4 * 60 * 60_000,
+  );
+  const live = maybeLive ? await getLiveMatches(teams).catch(() => []) : [];
+
   return {
     scores,
     played: played.reverse(),
     upcoming,
+    live,
     source: anyLive ? "live" : "placeholder",
     lastUpdated: Number.isFinite(oldest) ? oldest : Date.now(),
     notices,
@@ -512,6 +536,112 @@ export async function getResults(teams: Team[]): Promise<ResultsBundle> {
 
 function competitionKey(competitionId: number): string {
   return COMPETITIONS.find((c) => c.id === competitionId)?.key ?? String(competitionId);
+}
+
+/* ------------------------------------------------------------------- live */
+
+const LIVE_TTL = envInt("LIVE_TTL", 45);
+
+type LiveSide = { id: number; name: string; logo: string; score: number };
+
+type CachedLive = {
+  id: string;
+  competitionId: number;
+  clock: string;
+  phase: string;
+  home: LiveSide;
+  away: LiveSide;
+};
+
+function readLive(payload: unknown, competition: Competition): CachedLive[] {
+  const events = (payload as { events?: RawEvent[] })?.events ?? [];
+  const out: CachedLive[] = [];
+
+  for (const event of events) {
+    const type = event.status?.type;
+    if (type?.state !== "in") continue;
+
+    const competitors = event.competitions?.[0]?.competitors ?? [];
+    const read = (side: "home" | "away"): LiveSide | null => {
+      const c = competitors.find((x) => x.homeAway === side);
+      const id = Number(c?.team?.id);
+      if (!Number.isFinite(id)) return null;
+      return {
+        id,
+        name: c?.team?.displayName ?? c?.team?.shortDisplayName ?? `Team ${id}`,
+        logo: c?.team?.logo ?? logoFor(id),
+        score: toNumberOrNull(c?.score) ?? 0,
+      };
+    };
+
+    const home = read("home");
+    const away = read("away");
+    if (!home || !away) continue;
+
+    out.push({
+      id: String(event.id ?? ""),
+      competitionId: competition.id,
+      clock: event.status?.displayClock ?? "",
+      phase: type.description ?? "In progress",
+      home,
+      away,
+    });
+  }
+  return out;
+}
+
+/**
+ * Today's scoreboard, on a very short cache. The season-wide fetch is held for
+ * hours, which is far too stale to show a score that is still changing, so live
+ * matches get their own request — but only when a tracked club is actually
+ * playing, so this costs nothing on a quiet day.
+ */
+async function getLiveMatches(teams: Team[]): Promise<LiveMatch[]> {
+  const wanted = new Set(teams.map((t) => t.id));
+  const live: LiveMatch[] = [];
+
+  const perCompetition = await Promise.all(
+    COMPETITIONS.map(async (competition) => {
+      try {
+        const { data } = await swr(`live:${competition.slug}`, LIVE_TTL, async () =>
+          readLive(
+            await espn(`${ESPN_SITE}/${competition.slug}/scoreboard`),
+            competition,
+          ),
+        );
+        return data;
+      } catch {
+        return [] as CachedLive[];
+      }
+    }),
+  );
+
+  for (const matches of perCompetition) {
+    for (const match of matches) {
+      for (const [side, other] of [
+        [match.home, match.away],
+        [match.away, match.home],
+      ] as const) {
+        if (!wanted.has(side.id)) continue;
+        live.push({
+          fixtureId: Number(match.id) || 0,
+          teamId: side.id,
+          competitionId: match.competitionId,
+          competitionName:
+            COMPETITIONS.find((c) => c.id === match.competitionId)?.name ?? "",
+          opponent: other.name,
+          opponentLogo: other.logo,
+          home: side.id === match.home.id,
+          goalsFor: side.score,
+          goalsAgainst: other.score,
+          clock: match.clock,
+          phase: match.phase,
+        });
+      }
+    }
+  }
+
+  return live;
 }
 
 /* ----------------------------------------------------------- stat leaders */
