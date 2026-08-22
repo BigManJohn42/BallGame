@@ -17,20 +17,50 @@ Next.js App Router, deploys to Vercel as-is.
    | Competition        | Win | Draw |
    | ------------------ | --- | ---- |
    | Serie A            | 3   | 1    |
-   | Champions League   | 6   | 2    |
+   | Champions League   | 4   | 2    |
    | Europa League      | 4   | 2    |
-   | Conference League  | 3   | 1    |
+   | Conference League  | 4   | 2    |
    | Coppa Italia       | 4   | 2    |
    | Supercoppa         | 6   | 3    |
 
    Plus **+1 per goal scored** and **+2 for a clean sheet**, in any competition.
 
+   The three European competitions score identically on purpose. A club does not choose
+   which one it qualifies for, so paying more for the Champions League would just be a
+   second reward for finishing high last season — which the draw already reflects.
+
 4. A knockout tie settled on penalties counts as a win for whoever went through, not a
    draw. Postponed and abandoned games are ignored until they are actually played.
 5. Ties on points break by goal difference, then wins, then who joined first.
 
-Every number in that table is an environment variable, so you can rebalance it without
-touching code.
+### Bonus points
+
+On top of match results, clubs earn one-off bonuses.
+
+**Statistical awards — 15 points each.** Top scorer, top assister, most goals + assists,
+most saves, most clean sheets. These are contested **between the clubs in this game**, not
+against all of Europe — the Champions League top scorer is rarely a Serie A player, so a
+global comparison would leave every award unclaimed. Goals and assists are summed across
+all six competitions. If two clubs tie, both are paid; if two players at the same club tie,
+the club is paid once.
+
+**Cup progress.** Only the furthest round reached is paid, not every round along the way:
+
+| Reached | Points |
+| ------- | ------ |
+| Knockout playoff | 3 |
+| Round of 32 | 5 |
+| Round of 16 | 8 |
+| Quarter-final | 15 |
+| Semi-final | 25 |
+| Final | 40 |
+| **Won the trophy** | **70** |
+
+**Serie A finish.** Champions 50, top four 30, 5th–6th 15, 7th 8. Only the highest applies.
+
+Bonuses that are still contestable show faded on the leaderboard and can be lost again
+before the season ends. Every number above is an environment variable, so you can rebalance
+the whole game without touching code — see [.env.example](.env.example).
 
 ## Setup
 

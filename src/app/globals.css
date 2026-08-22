@@ -695,3 +695,60 @@ tbody tr.is-me {
     padding: 20px 14px 56px;
   }
 }
+
+/* ------------------------------------------------------------------ awards */
+
+.award-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.award {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 640;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  color: var(--gold);
+  border: 1px solid rgba(245, 196, 81, 0.34);
+  background: rgba(245, 196, 81, 0.1);
+}
+
+.award-provisional {
+  color: var(--muted);
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+td.subtle {
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.rule-head {
+  padding: 11px 16px 9px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+@media (max-width: 780px) {
+  .rules-grid {
+    grid-template-columns: 1fr;
+  }
+}

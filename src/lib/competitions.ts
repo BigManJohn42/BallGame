@@ -11,6 +11,13 @@ function envStr(name: string, fallback: string): string {
   return raw && raw.trim() ? raw.trim() : fallback;
 }
 
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export type Competition = {
   id: number;
   slug: string;
@@ -20,8 +27,19 @@ export type Competition = {
   /** Points for a win / draw in this competition. */
   win: number;
   draw: number;
+  /** Knockout competitions award progression bonuses; the league does not. */
+  knockout: boolean;
   accent: string;
 };
+
+/**
+ * The three European competitions score identically. A club has no say in which
+ * one it qualifies for, so rewarding the Champions League more heavily would
+ * just be a bonus for having finished higher last season — which the draw
+ * already accounts for.
+ */
+const EUROPE_WIN = envInt("POINTS_EUROPE_WIN", 4);
+const EUROPE_DRAW = envInt("POINTS_EUROPE_DRAW", 2);
 
 export const COMPETITIONS: Competition[] = [
   {
@@ -32,6 +50,7 @@ export const COMPETITIONS: Competition[] = [
     short: "SA",
     win: 3,
     draw: 1,
+    knockout: false,
     accent: "#3b82f6",
   },
   {
@@ -40,8 +59,9 @@ export const COMPETITIONS: Competition[] = [
     key: "ucl",
     name: "Champions League",
     short: "UCL",
-    win: 6,
-    draw: 2,
+    win: EUROPE_WIN,
+    draw: EUROPE_DRAW,
+    knockout: true,
     accent: "#818cf8",
   },
   {
@@ -50,8 +70,9 @@ export const COMPETITIONS: Competition[] = [
     key: "uel",
     name: "Europa League",
     short: "UEL",
-    win: 4,
-    draw: 2,
+    win: EUROPE_WIN,
+    draw: EUROPE_DRAW,
+    knockout: true,
     accent: "#fb923c",
   },
   {
@@ -60,8 +81,9 @@ export const COMPETITIONS: Competition[] = [
     key: "uecl",
     name: "Conference League",
     short: "UECL",
-    win: 3,
-    draw: 1,
+    win: EUROPE_WIN,
+    draw: EUROPE_DRAW,
+    knockout: true,
     accent: "#34d399",
   },
   {
@@ -72,6 +94,7 @@ export const COMPETITIONS: Competition[] = [
     short: "CI",
     win: 4,
     draw: 2,
+    knockout: true,
     accent: "#f472b6",
   },
   {
@@ -82,6 +105,7 @@ export const COMPETITIONS: Competition[] = [
     short: "SC",
     win: 6,
     draw: 3,
+    knockout: true,
     accent: "#fbbf24",
   },
 ];

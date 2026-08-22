@@ -13,6 +13,59 @@ export const GOAL_BONUS = envNum("POINTS_PER_GOAL", 1);
 export const CLEAN_SHEET_BONUS = envNum("POINTS_CLEAN_SHEET", 2);
 
 /**
+ * How far a club got in a knockout competition. Only the highest rung reached
+ * is paid out, so these are cumulative-feeling totals rather than increments.
+ * `rank` orders the ladder; the slug matchers are deliberately loose because
+ * each competition names its rounds slightly differently.
+ */
+export type Round = {
+  rank: number;
+  key: string;
+  label: string;
+  points: number;
+  match: RegExp;
+};
+
+// Ordered by rank. The patterns are mutually exclusive, so the first match
+// wins: "semifinals" is caught by /semi/ before /^final/ ever sees it.
+export const ROUNDS: Round[] = [
+  { rank: 1, key: "group", label: "League phase", points: 0, match: /league-phase|group/ },
+  { rank: 2, key: "playoff", label: "Knockout playoff", points: envNum("POINTS_ROUND_PLAYOFF", 3), match: /playoff/ },
+  { rank: 3, key: "r32", label: "Round of 32", points: envNum("POINTS_ROUND_32", 5), match: /round-of-32|^second-round/ },
+  { rank: 4, key: "r16", label: "Round of 16", points: envNum("POINTS_ROUND_16", 8), match: /round-of-16/ },
+  { rank: 5, key: "qf", label: "Quarter-final", points: envNum("POINTS_ROUND_QF", 15), match: /quarter/ },
+  { rank: 6, key: "sf", label: "Semi-final", points: envNum("POINTS_ROUND_SF", 25), match: /semi/ },
+  { rank: 7, key: "final", label: "Final", points: envNum("POINTS_ROUND_FINAL", 40), match: /^final/ },
+];
+
+/** Paid instead of the plain final bonus when the club actually lifts it. */
+export const TROPHY_POINTS = envNum("POINTS_TROPHY", 70);
+
+/**
+ * Maps a round slug to a rung on the ladder. Early qualifying rounds
+ * ("preliminary-round", "first-round") deliberately match nothing — reaching
+ * them is not an achievement worth paying for.
+ */
+export function roundFor(slug: string): Round | null {
+  const s = slug.toLowerCase();
+  for (const round of ROUNDS) {
+    if (round.match.test(s)) return round;
+  }
+  return null;
+}
+
+/** Serie A finishing position, paid at season end. */
+export const LEAGUE_FINISH = {
+  champions: envNum("POINTS_FINISH_CHAMPIONS", 50),
+  ucl: envNum("POINTS_FINISH_UCL", 30),
+  europa: envNum("POINTS_FINISH_EUROPA", 15),
+  conference: envNum("POINTS_FINISH_CONFERENCE", 8),
+};
+
+/** One-off awards for topping a statistical category among the game's clubs. */
+export const STAT_AWARD_POINTS = envNum("POINTS_STAT_AWARD", 15);
+
+/**
  * Points for one played match, from the perspective of the tracked team.
  * Result value comes from the competition table (a Champions League win is
  * worth more than a Conference League one); goals and clean sheets are flat.
