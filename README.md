@@ -14,20 +14,12 @@ Next.js App Router, deploys to Vercel as-is.
    fewer all end up with different teams.
 3. Results are pulled from the football API and turned into points:
 
-   | Competition        | Win | Draw |
-   | ------------------ | --- | ---- |
-   | Serie A            | 3   | 1    |
-   | Champions League   | 4   | 2    |
-   | Europa League      | 4   | 2    |
-   | Conference League  | 4   | 2    |
-   | Coppa Italia       | 4   | 2    |
-   | Supercoppa         | 6   | 3    |
+   Every competition pays **3 for a win and 1 for a draw**, plus **+1 per goal scored**
+   and **+2 for a clean sheet**.
 
-   Plus **+1 per goal scored** and **+2 for a clean sheet**, in any competition.
-
-   The three European competitions score identically on purpose. A club does not choose
-   which one it qualifies for, so paying more for the Champions League would just be a
-   second reward for finishing high last season — which the draw already reflects.
+   Scoring is flat across competitions on purpose. A club does not choose which cups it
+   ends up in, so paying more for one than another would just be a second reward for
+   finishing high last season — which the draw already reflects.
 
 4. A knockout tie settled on penalties counts as a win for whoever went through, not a
    draw. Postponed and abandoned games are ignored until they are actually played.
@@ -37,7 +29,7 @@ Next.js App Router, deploys to Vercel as-is.
 
 On top of match results, clubs earn one-off bonuses.
 
-**Statistical awards — 15 points each.** Top scorer, top assister, most goals + assists,
+**Statistical awards — 5 points each.** Top scorer, top assister, most goals + assists,
 most saves, most clean sheets. These are contested **between the clubs in this game**, not
 against all of Europe — the Champions League top scorer is rarely a Serie A player, so a
 global comparison would leave every award unclaimed. Goals and assists are summed across
@@ -48,15 +40,19 @@ the club is paid once.
 
 | Reached | Points |
 | ------- | ------ |
-| Knockout playoff | 3 |
-| Round of 32 | 5 |
-| Round of 16 | 8 |
-| Quarter-final | 15 |
-| Semi-final | 25 |
-| Final | 40 |
-| **Won the trophy** | **70** |
+| Knockout playoff | 1 |
+| Round of 32 | 2 |
+| Round of 16 | 3 |
+| Quarter-final | 5 |
+| Semi-final | 7 |
+| Final | 8 |
+| **Won the trophy** | **10** |
 
-**Serie A finish.** Champions 50, top four 30, 5th–6th 15, 7th 8. Only the highest applies.
+In Europe, the top eight of the league phase go straight to the last 16 while ninth to
+twenty-fourth have to win a playoff to get there. Both end up in the same round, so
+qualifying directly is worth **+3** on its own.
+
+**Serie A finish.** Champions 12, top four 8, 5th–6th 5, 7th 3. Only the highest applies.
 
 Bonuses that are still contestable show faded on the leaderboard and can be lost again
 before the season ends. Every number above is an environment variable, so you can rebalance
@@ -64,13 +60,24 @@ the whole game without touching code — see [.env.example](.env.example).
 
 ## What's on the page
 
-- **Leaderboard** — the players, their clubs, and points split into match and bonus.
-- **The real Serie A table**, separate from the leaderboard and updating as gameweeks are
-  played. Qualification and relegation bands are colour-coded, and the clubs somebody holds
-  are highlighted and clickable.
-- **Any club's full season.** Click a club anywhere and you get every result and every
-  remaining fixture across all six competitions, filterable by competition, with the points
-  each result earned. It is public: anyone can inspect anyone else's club, no login.
+Anything being played right now sits above the tabs, with a running score and clock —
+it's the most interesting thing on the page whatever you're reading. Then six tabs, each
+deep-linkable by URL hash:
+
+| Tab | What's in it |
+| --- | --- |
+| **Leaderboard** | Players, clubs, points split into match and bonus, movement arrows since the last gameweek, and where each club's points came from |
+| **Serie A** | The real league table, colour-coded by qualification and relegation band, with the clubs in play highlighted |
+| **Players** | Top scorers, assists, goals + assists and saves — among the clubs in this game |
+| **Fixtures** | Recent results with the points they earned, and what's coming up |
+| **This week** | Who gained, who climbed, result of the week, and a summary you can paste into the group chat |
+| **Rules** | Every scoring value, including the bonuses |
+
+**Any club's full season.** Click a club anywhere and you get every result and every
+remaining fixture across all six competitions, filterable by competition, with the points
+each result earned. It is public: anyone can inspect anyone else's club, no login.
+
+On phones the leaderboard becomes cards rather than a ten-column table.
 
 ## Setup
 
@@ -147,6 +154,7 @@ Set `TRACK_SEASON=2025` and it scores the completed 2025/26 season instead.
 | `POST /api/refresh`       | Forces a re-read of results, rate limited to once a minute      |
 | `GET /api/cron`           | Daily warm-up, wired in `vercel.json`                           |
 | `GET /api/club/{teamId}`  | One club's whole season — every result and fixture. Public       |
+| `GET /api/players`       | Individual stat leaders among the clubs in the game             |
 | `GET /api/leagues`        | Health check: confirms all six ESPN slugs still resolve         |
 
 Players are identified by an opaque token in an httpOnly cookie — no passwords, no

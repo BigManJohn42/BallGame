@@ -5,12 +5,25 @@ import ClubPanel from "./ClubPanel";
 import LeaderboardTable from "./LeaderboardTable";
 import LeagueTable from "./LeagueTable";
 import LiveNow from "./LiveNow";
+import PlayersPanel from "./PlayersPanel";
+import SummaryPanel from "./SummaryPanel";
 import { Fixtures, Results } from "./MatchFeed";
 import ScoringPanel from "./ScoringPanel";
 import type { GameState, Team } from "@/lib/types";
 
 const POLL_MS = 60_000;
 const SPIN_MS = 1900;
+
+const TABS = [
+  { id: "leaderboard", label: "Leaderboard" },
+  { id: "table", label: "Serie A" },
+  { id: "players", label: "Players" },
+  { id: "matches", label: "Fixtures" },
+  { id: "summary", label: "This week" },
+  { id: "rules", label: "Rules" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
 
 export default function Game({ initial }: { initial: GameState }) {
   const [state, setState] = useState<GameState>(initial);
@@ -22,12 +35,32 @@ export default function Game({ initial }: { initial: GameState }) {
   const [revealed, setRevealed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [openClub, setOpenClub] = useState<number | null>(null);
+  const [tab, setTab] = useState<TabId>("leaderboard");
 
   const spinning = useRef(false);
   const cycleTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => setMounted(true), []);
+
+  // The tab lives in the URL hash so a particular view can be linked to, and so
+  // reloading does not bounce you back to the leaderboard.
+  useEffect(() => {
+    const fromHash = () => {
+      const id = window.location.hash.replace("#", "");
+      if (TABS.some((t) => t.id === id)) setTab(id as TabId);
+    };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, []);
+
+  const selectTab = useCallback((id: TabId) => {
+    setTab(id);
+    // replaceState keeps the back button meaning "leave the site", not "undo
+    // six tab clicks".
+    window.history.replaceState(null, "", `#${id}`);
+  }, []);
 
   useEffect(
     () => () => {
@@ -279,60 +312,94 @@ export default function Game({ initial }: { initial: GameState }) {
         </p>
       ) : null}
 
+      {/* Live matches sit above the tabs: if something is being played right
+          now, it is the most interesting thing on the page whatever tab you are
+          reading. */}
       <LiveNow matches={state.live} meta={state.meta} onPick={setOpenClub} />
 
-      <section className="section">
-        <div className="section-head">
-          <h2>Leaderboard</h2>
-          <span suppressHydrationWarning>
-            {mounted && state.meta.lastUpdated
-              ? `Results as of ${new Date(state.meta.lastUpdated).toLocaleString()}`
-              : ""}
-          </span>
-        </div>
-        <LeaderboardTable
-          rows={state.leaderboard}
-          meId={me?.id ?? null}
-          competitions={state.meta.competitions}
-          onPick={setOpenClub}
-        />
-      </section>
+      <nav className="tabs" role="tablist" aria-label="Sections">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`tab${tab === t.id ? " tab-on" : ""}`}
+            onClick={() => selectTab(t.id)}
+          >
+            {t.label}
+            {t.id === "summary" && state.summary.matchesPlayed > 0 ? (
+              <span className="tab-badge">{state.summary.matchesPlayed}</span>
+            ) : null}
+          </button>
+        ))}
+      </nav>
 
-      <section className="section">
-        <div className="section-head">
-          <h2>Serie A {state.meta.trackSeason}</h2>
-          <span>the real table · clubs in play are highlighted</span>
-        </div>
-        <LeagueTable
-          rows={state.table}
-          inGame={new Set(state.leaderboard.map((r) => r.player.teamId))}
-          onPick={setOpenClub}
-        />
-      </section>
+      <section className="section" role="tabpanel">
+        {tab === "leaderboard" ? (
+          <>
+            <div className="section-head">
+              <h2>Leaderboard</h2>
+              <span suppressHydrationWarning>
+                {mounted && state.meta.lastUpdated
+                  ? `Results as of ${new Date(state.meta.lastUpdated).toLocaleString()}`
+                  : ""}
+              </span>
+            </div>
+            <LeaderboardTable
+              rows={state.leaderboard}
+              meId={me?.id ?? null}
+              competitions={state.meta.competitions}
+              onPick={setOpenClub}
+            />
+          </>
+        ) : null}
 
-      <section className="section grid-2">
-        <div>
-          <div className="section-head">
-            <h2>Latest results</h2>
-            <span>points scored</span>
+        {tab === "table" ? (
+          <>
+            <div className="section-head">
+              <h2>Serie A {state.meta.trackSeason}</h2>
+              <span>the real table · clubs in play are highlighted</span>
+            </div>
+            <LeagueTable
+              rows={state.table}
+              inGame={new Set(state.leaderboard.map((r) => r.player.teamId))}
+              onPick={setOpenClub}
+            />
+          </>
+        ) : null}
+
+        {tab === "players" ? <PlayersPanel onPick={setOpenClub} /> : null}
+
+        {tab === "summary" ? <SummaryPanel summary={state.summary} /> : null}
+
+        {tab === "matches" ? (
+          <div className="grid-2">
+            <div>
+              <div className="section-head">
+                <h2>Latest results</h2>
+                <span>points scored</span>
+              </div>
+              <Results state={state} matches={state.recent} />
+            </div>
+            <div>
+              <div className="section-head">
+                <h2>Coming up</h2>
+                <span>all six competitions</span>
+              </div>
+              <Fixtures state={state} matches={state.upcoming} />
+            </div>
           </div>
-          <Results state={state} matches={state.recent} />
-        </div>
-        <div>
-          <div className="section-head">
-            <h2>Coming up</h2>
-            <span>all six competitions</span>
-          </div>
-          <Fixtures state={state} matches={state.upcoming} />
-        </div>
-      </section>
+        ) : null}
 
-      <section className="section">
-        <div className="section-head">
-          <h2>How points work</h2>
-          <span>bigger competition, bigger reward</span>
-        </div>
-        <ScoringPanel meta={state.meta} />
+        {tab === "rules" ? (
+          <>
+            <div className="section-head">
+              <h2>How points work</h2>
+              <span>every value is configurable</span>
+            </div>
+            <ScoringPanel meta={state.meta} />
+          </>
+        ) : null}
       </section>
 
       {openClub !== null ? (

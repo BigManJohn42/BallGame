@@ -16,6 +16,7 @@ import {
   type RankedRow,
 } from "./movement";
 import { CLEAN_SHEET_BONUS, GOAL_BONUS } from "./scoring";
+import { buildSummary } from "./summary";
 import { getStore } from "./store";
 import type {
   Award,
@@ -91,7 +92,7 @@ const HISTORY_TTL = 60 * 60 * 24 * 400; // a season and then some
 async function readMovement(
   rows: LeaderboardRow[],
   playedTotal: number,
-): Promise<Record<string, Movement>> {
+): Promise<{ movement: Record<string, Movement>; since: number | null }> {
   const store = getStore();
   const ranked: RankedRow[] = rows.map((r) => ({
     rank: r.rank,
@@ -103,7 +104,7 @@ async function readMovement(
   try {
     history = await store.cacheGet<History>(HISTORY_KEY);
   } catch {
-    return {};
+    return { movement: {}, since: null };
   }
 
   const { baseline, save } = advanceHistory(
@@ -113,7 +114,7 @@ async function readMovement(
   if (save) {
     await store.cacheSet<History>(HISTORY_KEY, save, HISTORY_TTL).catch(() => {});
   }
-  return diffAgainst(baseline, ranked);
+  return { movement: diffAgainst(baseline, ranked), since: baseline?.at ?? null };
 }
 
 export function buildLeaderboard(
@@ -214,8 +215,18 @@ async function assembleSeason() {
     (n, t) => n + (results.scores[t.id]?.played ?? 0),
     0,
   );
-  const movement = await readMovement(ranked, playedTotal).catch(() => ({}));
+  const { movement, since } = await readMovement(ranked, playedTotal).catch(() => ({
+    movement: {} as Record<string, Movement>,
+    since: null,
+  }));
   const leaderboard = buildLeaderboard(players, results.scores, movement);
+
+  const summary = buildSummary({
+    rows: leaderboard,
+    played: results.played,
+    since,
+    now: Date.now(),
+  });
 
   const table = await getFullTable(TRACK_SEASON)
     .then((t) => t.rows)
@@ -228,13 +239,13 @@ async function assembleSeason() {
     );
   }
 
-  return { store, pool, players, trackedTeams, results, leaderboard, table, notices };
+  return { store, pool, players, trackedTeams, results, leaderboard, table, summary, notices };
 }
 
 /** Everything the front page renders, in a single round trip. */
 export async function getGameState(me: Player | null): Promise<GameState> {
   const s = await assembleSeason();
-  const { store, pool, players, results, leaderboard, table, notices } = s;
+  const { store, pool, players, results, leaderboard, table, summary, notices } = s;
 
   // Show only clubs somebody actually holds once the game has started; before
   // that, show the whole pool so the page is not empty on arrival.
@@ -246,6 +257,7 @@ export async function getGameState(me: Player | null): Promise<GameState> {
     teams: pool.teams,
     leaderboard,
     table,
+    summary,
     live: results.live,
     recent: results.played.filter((m) => inFeed(m.teamId)).slice(0, 24),
     upcoming: results.upcoming.filter((m) => inFeed(m.teamId)).slice(0, 12),
@@ -295,4 +307,10 @@ export async function getClubSeason(teamId: number): Promise<ClubSeason | null> 
     upcoming: results.upcoming.filter((m) => m.teamId === teamId),
     leaguePosition: position && position.played > 0 ? position.rank : null,
   };
+}
+
+/** The clubs whose results are being followed: the draw pool plus anything held. */
+export async function getTrackedTeams(): Promise<Team[]> {
+  const { trackedTeams } = await assembleSeason();
+  return trackedTeams;
 }

@@ -126,6 +126,52 @@ export type LeagueRow = {
   zoneColor: string | null;
 };
 
+export type SummaryStanding = {
+  rank: number;
+  name: string;
+  team: string;
+  points: number;
+  rankChange: number | null;
+  pointsGained: number;
+};
+
+/** What changed since the last gameweek. */
+export type WeeklySummary = {
+  since: number | null;
+  matchesPlayed: number;
+  standings: SummaryStanding[];
+  topEarner: SummaryStanding | null;
+  biggestClimb: SummaryStanding | null;
+  bestResult: {
+    player: string;
+    opponent: string;
+    home: boolean;
+    goalsFor: number;
+    goalsAgainst: number;
+    competition: string;
+    points: number;
+  } | null;
+  /** Plain text, ready to paste into a group chat. */
+  text: string;
+};
+
+/** One player's tally in a statistical category, among the game's clubs. */
+export type PlayerStat = {
+  athleteId: string;
+  name: string;
+  teamId: number;
+  teamName: string;
+  teamLogo: string;
+  value: number;
+};
+
+export type PlayerBoard = {
+  key: string;
+  label: string;
+  unit: string;
+  rows: PlayerStat[];
+};
+
 /** A single club's whole season, for the per-player detail view. */
 export type ClubSeason = {
   team: Team;
@@ -144,6 +190,8 @@ export type GameState = {
   table: LeagueRow[];
   /** Matches involving a tracked club that are being played right now. */
   live: LiveMatch[];
+  /** What has changed since the last gameweek. */
+  summary: WeeklySummary;
   recent: PlayedMatch[];
   upcoming: UpcomingMatch[];
   meta: {

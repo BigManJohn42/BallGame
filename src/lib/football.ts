@@ -5,6 +5,7 @@ import type {
   DataSource,
   LeagueRow,
   LiveMatch,
+  PlayerBoard,
   PlayedMatch,
   Team,
   TeamScore,
@@ -801,6 +802,76 @@ export async function athleteName(athleteId: string): Promise<string> {
   } catch {
     return "a player";
   }
+}
+
+/**
+ * Ranked individual stats among the clubs in this game. Names cost one small
+ * request each, cached for a month, so only the rows actually shown are
+ * resolved — and they are fetched together rather than one after another.
+ */
+export async function getPlayerBoards(teams: Team[]): Promise<{
+  boards: PlayerBoard[];
+  notices: string[];
+}> {
+  const perTeam = new Map(teams.map((t) => [t.id, t]));
+  const leaders = await getLeaders();
+
+  const categories: [string, string, string, StatLine[]][] = [
+    ["goals", "Top scorers", "goals", leaders.goals],
+    ["assists", "Most assists", "assists", leaders.assists],
+    [
+      "contributions",
+      "Goals + assists",
+      "G+A",
+      mergeStats(leaders.goals, leaders.assists),
+    ],
+    ["saves", "Most saves", "saves", leaders.saves],
+  ];
+
+  const shortlists = categories.map(([key, label, unit, lines]) => ({
+    key,
+    label,
+    unit,
+    lines: lines
+      .filter((l) => perTeam.has(l.teamId) && l.value > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10),
+  }));
+
+  // One lookup per distinct athlete across every board.
+  const ids = [...new Set(shortlists.flatMap((s) => s.lines.map((l) => l.athleteId)))];
+  const names = new Map(
+    await Promise.all(ids.map(async (id) => [id, await athleteName(id)] as const)),
+  );
+
+  const boards: PlayerBoard[] = shortlists.map((s) => ({
+    key: s.key,
+    label: s.label,
+    unit: s.unit,
+    rows: s.lines.map((l) => {
+      const team = perTeam.get(l.teamId);
+      return {
+        athleteId: l.athleteId,
+        name: names.get(l.athleteId) ?? "a player",
+        teamId: l.teamId,
+        teamName: team?.name ?? `Team ${l.teamId}`,
+        teamLogo: team?.logo ?? logoFor(l.teamId),
+        value: l.value,
+      };
+    }),
+  }));
+
+  return { boards, notices: leaders.notices };
+}
+
+function mergeStats(a: StatLine[], b: StatLine[]): StatLine[] {
+  const merged = new Map<string, StatLine>();
+  for (const line of [...a, ...b]) {
+    const running = merged.get(line.athleteId);
+    if (running) running.value += line.value;
+    else merged.set(line.athleteId, { ...line });
+  }
+  return [...merged.values()];
 }
 
 /* --------------------------------------------------------- league position */
