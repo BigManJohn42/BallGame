@@ -1,6 +1,14 @@
 import { COMPETITIONS } from "./competitions";
 import { athleteName, getLeaders, getLeagueTable, type StatLine } from "./football";
-import { LEAGUE_FINISH, ROUNDS, STAT_AWARD_POINTS, TROPHY_POINTS, roundFor } from "./scoring";
+import {
+  AUTO_R16_POINTS,
+  LEAGUE_FINISH,
+  R16_RANK,
+  ROUNDS,
+  STAT_AWARD_POINTS,
+  TROPHY_POINTS,
+  roundFor,
+} from "./scoring";
 import type { Award, PlayedMatch, Team, TeamScore, UpcomingMatch } from "./types";
 
 /**
@@ -113,6 +121,13 @@ export async function computeAwards(input: {
 
     const furthest = new Map<number, { rank: number; label: string; points: number }>();
     const finalsWon = new Set<number>();
+    // Clubs that had to come through the knockout playoff to reach the last 16.
+    const viaPlayoff = new Set<number>();
+
+    for (const match of [...input.played, ...input.upcoming]) {
+      if (match.competitionId !== competition.id) continue;
+      if (roundFor(match.round)?.key === "playoff") viaPlayoff.add(match.teamId);
+    }
 
     for (const match of input.played) {
       if (match.competitionId !== competition.id) continue;
@@ -166,6 +181,17 @@ export async function computeAwards(input: {
         points: won ? TROPHY_POINTS : reached.points,
         provisional: !won && stillAlive.has(teamId),
       });
+
+      // Reaching the last 16 without a playoff means a top-eight league phase.
+      if (competition.europe && reached.rank >= R16_RANK && !viaPlayoff.has(teamId)) {
+        give(teamId, {
+          key: `${competition.key}-auto-r16`,
+          label: `${competition.short}: straight to the last 16`,
+          detail: "Top eight in the league phase, no playoff needed",
+          points: AUTO_R16_POINTS,
+          provisional: false,
+        });
+      }
     }
   }
 
@@ -228,10 +254,12 @@ export function awardCatalogue() {
       { label: "Most saves", points: STAT_AWARD_POINTS },
       { label: "Most clean sheets", points: STAT_AWARD_POINTS },
     ],
-    rounds: ROUNDS.filter((r) => r.points > 0).map((r) => ({
-      label: r.label,
-      points: r.points,
-    })).concat([{ label: "Win the trophy", points: TROPHY_POINTS }]),
+    rounds: ROUNDS.filter((r) => r.points > 0)
+      .map((r) => ({ label: r.label, points: r.points }))
+      .concat([
+        { label: "Straight to the last 16 (Europe)", points: AUTO_R16_POINTS },
+        { label: "Win the trophy", points: TROPHY_POINTS },
+      ]),
     finish: [
       { label: "Serie A champions", points: LEAGUE_FINISH.champions },
       { label: "Top 4 (Champions League)", points: LEAGUE_FINISH.ucl },

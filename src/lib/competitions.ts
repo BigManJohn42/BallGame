@@ -29,17 +29,18 @@ export type Competition = {
   draw: number;
   /** Knockout competitions award progression bonuses; the league does not. */
   knockout: boolean;
+  /** UEFA competitions have a league phase and a knockout playoff round. */
+  europe: boolean;
   accent: string;
 };
 
 /**
- * The three European competitions score identically. A club has no say in which
- * one it qualifies for, so rewarding the Champions League more heavily would
- * just be a bonus for having finished higher last season — which the draw
- * already accounts for.
+ * Every competition scores a win and a draw the same. A club has no say in
+ * which cups it ends up in, so paying more for one than another is really a
+ * reward for last season — which the draw already accounts for.
  */
-const EUROPE_WIN = envInt("POINTS_EUROPE_WIN", 4);
-const EUROPE_DRAW = envInt("POINTS_EUROPE_DRAW", 2);
+const WIN = envInt("POINTS_WIN", 3);
+const DRAW = envInt("POINTS_DRAW", 1);
 
 export const COMPETITIONS: Competition[] = [
   {
@@ -48,9 +49,10 @@ export const COMPETITIONS: Competition[] = [
     key: "serie-a",
     name: "Serie A",
     short: "SA",
-    win: 3,
-    draw: 1,
+    win: WIN,
+    draw: DRAW,
     knockout: false,
+    europe: false,
     accent: "#3b82f6",
   },
   {
@@ -59,9 +61,10 @@ export const COMPETITIONS: Competition[] = [
     key: "ucl",
     name: "Champions League",
     short: "UCL",
-    win: EUROPE_WIN,
-    draw: EUROPE_DRAW,
+    win: WIN,
+    draw: DRAW,
     knockout: true,
+    europe: true,
     accent: "#818cf8",
   },
   {
@@ -70,9 +73,10 @@ export const COMPETITIONS: Competition[] = [
     key: "uel",
     name: "Europa League",
     short: "UEL",
-    win: EUROPE_WIN,
-    draw: EUROPE_DRAW,
+    win: WIN,
+    draw: DRAW,
     knockout: true,
+    europe: true,
     accent: "#fb923c",
   },
   {
@@ -81,9 +85,10 @@ export const COMPETITIONS: Competition[] = [
     key: "uecl",
     name: "Conference League",
     short: "UECL",
-    win: EUROPE_WIN,
-    draw: EUROPE_DRAW,
+    win: WIN,
+    draw: DRAW,
     knockout: true,
+    europe: true,
     accent: "#34d399",
   },
   {
@@ -92,9 +97,10 @@ export const COMPETITIONS: Competition[] = [
     key: "coppa",
     name: "Coppa Italia",
     short: "CI",
-    win: 4,
-    draw: 2,
+    win: WIN,
+    draw: DRAW,
     knockout: true,
+    europe: false,
     accent: "#f472b6",
   },
   {
@@ -103,9 +109,10 @@ export const COMPETITIONS: Competition[] = [
     key: "supercoppa",
     name: "Supercoppa Italiana",
     short: "SC",
-    win: 6,
-    draw: 3,
+    win: WIN,
+    draw: DRAW,
     knockout: true,
+    europe: false,
     accent: "#fbbf24",
   },
 ];

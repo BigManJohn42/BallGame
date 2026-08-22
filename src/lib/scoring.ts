@@ -30,16 +30,26 @@ export type Round = {
 // wins: "semifinals" is caught by /semi/ before /^final/ ever sees it.
 export const ROUNDS: Round[] = [
   { rank: 1, key: "group", label: "League phase", points: 0, match: /league-phase|group/ },
-  { rank: 2, key: "playoff", label: "Knockout playoff", points: envNum("POINTS_ROUND_PLAYOFF", 3), match: /playoff/ },
-  { rank: 3, key: "r32", label: "Round of 32", points: envNum("POINTS_ROUND_32", 5), match: /round-of-32|^second-round/ },
-  { rank: 4, key: "r16", label: "Round of 16", points: envNum("POINTS_ROUND_16", 8), match: /round-of-16/ },
-  { rank: 5, key: "qf", label: "Quarter-final", points: envNum("POINTS_ROUND_QF", 15), match: /quarter/ },
-  { rank: 6, key: "sf", label: "Semi-final", points: envNum("POINTS_ROUND_SF", 25), match: /semi/ },
-  { rank: 7, key: "final", label: "Final", points: envNum("POINTS_ROUND_FINAL", 40), match: /^final/ },
+  { rank: 2, key: "playoff", label: "Knockout playoff", points: envNum("POINTS_ROUND_PLAYOFF", 1), match: /playoff/ },
+  { rank: 3, key: "r32", label: "Round of 32", points: envNum("POINTS_ROUND_32", 2), match: /round-of-32|^second-round/ },
+  { rank: 4, key: "r16", label: "Round of 16", points: envNum("POINTS_ROUND_16", 3), match: /round-of-16/ },
+  { rank: 5, key: "qf", label: "Quarter-final", points: envNum("POINTS_ROUND_QF", 5), match: /quarter/ },
+  { rank: 6, key: "sf", label: "Semi-final", points: envNum("POINTS_ROUND_SF", 7), match: /semi/ },
+  { rank: 7, key: "final", label: "Final", points: envNum("POINTS_ROUND_FINAL", 8), match: /^final/ },
 ];
 
+export const R16_RANK = 4;
+
 /** Paid instead of the plain final bonus when the club actually lifts it. */
-export const TROPHY_POINTS = envNum("POINTS_TROPHY", 70);
+export const TROPHY_POINTS = envNum("POINTS_TROPHY", 10);
+
+/**
+ * European clubs finishing top eight of the league phase go straight to the
+ * last 16; everyone from ninth down has to win a knockout playoff to get there.
+ * Both end up in the same round, so without this the stronger league-phase
+ * campaign counts for nothing.
+ */
+export const AUTO_R16_POINTS = envNum("POINTS_AUTO_R16", 3);
 
 /**
  * Maps a round slug to a rung on the ladder. Early qualifying rounds
@@ -56,14 +66,14 @@ export function roundFor(slug: string): Round | null {
 
 /** Serie A finishing position, paid at season end. */
 export const LEAGUE_FINISH = {
-  champions: envNum("POINTS_FINISH_CHAMPIONS", 50),
-  ucl: envNum("POINTS_FINISH_UCL", 30),
-  europa: envNum("POINTS_FINISH_EUROPA", 15),
-  conference: envNum("POINTS_FINISH_CONFERENCE", 8),
+  champions: envNum("POINTS_FINISH_CHAMPIONS", 12),
+  ucl: envNum("POINTS_FINISH_UCL", 8),
+  europa: envNum("POINTS_FINISH_EUROPA", 5),
+  conference: envNum("POINTS_FINISH_CONFERENCE", 3),
 };
 
 /** One-off awards for topping a statistical category among the game's clubs. */
-export const STAT_AWARD_POINTS = envNum("POINTS_STAT_AWARD", 15);
+export const STAT_AWARD_POINTS = envNum("POINTS_STAT_AWARD", 5);
 
 /**
  * Points for one played match, from the perspective of the tracked team.
