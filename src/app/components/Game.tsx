@@ -1,7 +1,9 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import ClubPanel from "./ClubPanel";
 import LeaderboardTable from "./LeaderboardTable";
+import LeagueTable from "./LeagueTable";
 import { Fixtures, Results } from "./MatchFeed";
 import ScoringPanel from "./ScoringPanel";
 import type { GameState, Team } from "@/lib/types";
@@ -18,6 +20,7 @@ export default function Game({ initial }: { initial: GameState }) {
   const [spin, setSpin] = useState<Team | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [openClub, setOpenClub] = useState<number | null>(null);
 
   const spinning = useRef(false);
   const cycleTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -284,7 +287,23 @@ export default function Game({ initial }: { initial: GameState }) {
               : ""}
           </span>
         </div>
-        <LeaderboardTable rows={state.leaderboard} meId={me?.id ?? null} />
+        <LeaderboardTable
+          rows={state.leaderboard}
+          meId={me?.id ?? null}
+          onPick={setOpenClub}
+        />
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <h2>Serie A {state.meta.trackSeason}</h2>
+          <span>the real table · clubs in play are highlighted</span>
+        </div>
+        <LeagueTable
+          rows={state.table}
+          inGame={new Set(state.leaderboard.map((r) => r.player.teamId))}
+          onPick={setOpenClub}
+        />
       </section>
 
       <section className="section grid-2">
@@ -311,6 +330,14 @@ export default function Game({ initial }: { initial: GameState }) {
         </div>
         <ScoringPanel meta={state.meta} />
       </section>
+
+      {openClub !== null ? (
+        <ClubPanel
+          teamId={openClub}
+          meta={state.meta}
+          onClose={() => setOpenClub(null)}
+        />
+      ) : null}
     </div>
   );
 }
