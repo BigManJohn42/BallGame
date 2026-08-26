@@ -95,6 +95,13 @@ anyone else's club, no login.
 
 On phones the leaderboard becomes cards rather than a ten-column table.
 
+**Chat** sits in the bottom-left corner of every tab, with an unread count while it is
+closed. Whoever holds the player cookie posts as themselves and gets a ✓; anyone else picks
+a name from the list and posts without one. That is deliberate — it is a game between
+friends, not an account system, so claiming a name is possible and the tick simply says
+which messages came from that player's own browser. Messages are capped at 500 characters,
+one every couple of seconds per person, and the last 200 are kept.
+
 ### About the club profiles
 
 Histories, honours, legends and managers are **written by hand** in
@@ -182,6 +189,8 @@ Set `TRACK_SEASON=2025` and it scores the completed 2025/26 season instead.
 | `GET /api/cron`           | Daily warm-up, wired in `vercel.json`                           |
 | `GET /api/club/{teamId}`  | One club's whole season — every result and fixture. Public       |
 | `GET /api/players`       | Individual stat leaders among the clubs in the game             |
+| `GET /api/chat`          | Recent messages, newest first                                   |
+| `POST /api/chat`         | `{ "text": "...", "as": "playerId" }` — posts a message          |
 | `GET /api/leagues`        | Health check: confirms all six ESPN slugs still resolve         |
 
 Players are identified by an opaque token in an httpOnly cookie — no passwords, no

@@ -1,10 +1,11 @@
 import { Redis } from "@upstash/redis";
-import type { Player } from "./types";
+import type { ChatMessage, Player } from "./types";
 
 const K = {
   players: "bg:players",
   tokens: "bg:tokens",
   names: "bg:names",
+  chat: "bg:chat",
   cache: (key: string) => `bg:cache:${key}`,
   lock: (key: string) => `bg:lock:${key}`,
 };
@@ -22,7 +23,30 @@ export interface Store {
   claimName(name: string, playerId: string): Promise<boolean>;
   savePlayer(player: Player, token: string): Promise<void>;
   deletePlayer(id: string): Promise<void>;
+  /**
+   * Appends atomically and trims to `cap`. A read-modify-write on a plain key
+   * would drop messages whenever two people posted at once.
+   */
+  pushChat(message: ChatMessage, cap: number): Promise<void>;
+  /** Newest first. */
+  listChat(limit: number): Promise<ChatMessage[]>;
   reset(): Promise<void>;
+}
+
+/**
+ * Upstash serialises values itself, so a stored object may come back already
+ * parsed or still as a string depending on the client version. Handle both.
+ */
+function asMessage(raw: unknown): ChatMessage | null {
+  try {
+    const value = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (value && typeof value === "object" && typeof (value as ChatMessage).text === "string") {
+      return value as ChatMessage;
+    }
+  } catch {
+    /* a corrupt entry should not take the whole log down */
+  }
+  return null;
 }
 
 function redisCredentials(): { url: string; token: string } | null {
@@ -96,8 +120,18 @@ function createRedisStore(url: string, token: string): Store {
       if (mine.length) await redis.hdel(K.tokens, ...mine);
     },
 
+    async pushChat(message: ChatMessage, cap: number) {
+      await redis.lpush(K.chat, JSON.stringify(message));
+      await redis.ltrim(K.chat, 0, cap - 1);
+    },
+
+    async listChat(limit: number) {
+      const raw = (await redis.lrange(K.chat, 0, limit - 1)) as unknown[];
+      return raw.map(asMessage).filter((m): m is ChatMessage => m !== null);
+    },
+
     async reset() {
-      await redis.del(K.players, K.tokens, K.names);
+      await redis.del(K.players, K.tokens, K.names, K.chat);
     },
   };
 }
@@ -110,6 +144,7 @@ type MemoryData = {
   names: Map<string, string>;
   cache: Map<string, { value: unknown; expires: number }>;
   locks: Map<string, number>;
+  chat: ChatMessage[];
 };
 
 // Survives hot reloads in dev; does NOT survive between serverless invocations,
@@ -121,6 +156,7 @@ const memory: MemoryData = (globalMemory.__ballgame ??= {
   names: new Map(),
   cache: new Map(),
   locks: new Map(),
+  chat: [],
 });
 
 function createMemoryStore(): Store {
@@ -186,10 +222,20 @@ function createMemoryStore(): Store {
       }
     },
 
+    async pushChat(message: ChatMessage, cap: number) {
+      memory.chat.unshift(message);
+      if (memory.chat.length > cap) memory.chat.length = cap;
+    },
+
+    async listChat(limit: number) {
+      return memory.chat.slice(0, limit);
+    },
+
     async reset() {
       memory.players.clear();
       memory.tokens.clear();
       memory.names.clear();
+      memory.chat.length = 0;
     },
   };
 }

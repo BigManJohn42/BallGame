@@ -245,6 +245,18 @@ export type Derby = {
   awayOwner: string | null;
 };
 
+export type ChatMessage = {
+  id: string;
+  /** Display name at the time of posting, so a later rename cannot rewrite history. */
+  name: string;
+  teamId: number | null;
+  teamLogo: string | null;
+  /** Posted from a browser holding that player's cookie, rather than just claiming the name. */
+  verified: boolean;
+  text: string;
+  at: number;
+};
+
 export type GameState = {
   me: Player | null;
   teams: Team[];
