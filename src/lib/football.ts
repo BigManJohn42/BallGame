@@ -7,6 +7,7 @@ import type {
   HeadToHeadMeeting,
   LeagueRow,
   LiveMatch,
+  MatchEvent,
   PlayerBoard,
   PlayedMatch,
   Team,
@@ -947,6 +948,85 @@ export async function getHeadToHead(
       return { summary: series.summary ?? "", meetings } satisfies HeadToHead;
     });
     return data;
+  } catch {
+    return null;
+  }
+}
+
+/* ---------------------------------------------------------- match events */
+
+const EVENTS_TTL = envInt("EVENTS_TTL", 60 * 60 * 24 * 45);
+
+type RawKeyEvent = {
+  type?: { text?: string };
+  clock?: { displayValue?: string };
+  team?: { id?: string };
+  participants?: { athlete?: { displayName?: string } }[];
+  text?: string;
+};
+
+/**
+ * Goals from a finished match: who, when, and who set it up.
+ *
+ * A completed match never changes, so these are held for weeks — which is what
+ * lets the archive of reports build up over a season without refetching.
+ */
+export async function getMatchEvents(
+  competitionId: number,
+  fixtureId: number,
+): Promise<MatchEvent[] | null> {
+  const competition = COMPETITIONS.find((c) => c.id === competitionId);
+  if (!competition || !fixtureId) return null;
+
+  try {
+    const { data } = await swr(
+      `events:${competition.slug}:${fixtureId}`,
+      EVENTS_TTL,
+      async () => {
+        const payload = (await espn(
+          `${ESPN_SITE}/${competition.slug}/summary?event=${fixtureId}`,
+        )) as { keyEvents?: RawKeyEvent[] };
+
+        const events: MatchEvent[] = [];
+        for (const raw of payload?.keyEvents ?? []) {
+          const label = raw.type?.text ?? "";
+          if (!/goal/i.test(label)) continue;
+
+          const teamId = Number(raw.team?.id);
+          const scorer = raw.participants?.[0]?.athlete?.displayName;
+          if (!Number.isFinite(teamId) || !scorer) continue;
+
+          events.push({
+            kind: label,
+            ownGoal: /own goal/i.test(label),
+            penalty: /penalty/i.test(label),
+            minute: raw.clock?.displayValue ?? "",
+            scorer,
+            assist: raw.participants?.[1]?.athlete?.displayName ?? null,
+            teamId,
+          });
+        }
+        return events;
+      },
+    );
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** Reads a cached event list without going upstream. Used to bound archive cost. */
+export async function cachedMatchEvents(
+  competitionId: number,
+  fixtureId: number,
+): Promise<MatchEvent[] | null> {
+  const competition = COMPETITIONS.find((c) => c.id === competitionId);
+  if (!competition) return null;
+  try {
+    const entry = await getStore().cacheGet<{ data: MatchEvent[] }>(
+      `events:${competition.slug}:${fixtureId}`,
+    );
+    return entry?.data ?? null;
   } catch {
     return null;
   }

@@ -68,6 +68,7 @@ deep-linkable by URL hash:
 | --- | --- |
 | **Leaderboard** | Players, clubs, points split into match and bonus, movement arrows since the last gameweek, and where each club's points came from |
 | **Serie A** | The real league table, colour-coded by qualification and relegation band, with the clubs in play highlighted |
+| **News** | A short report on every match your clubs have played, kept for the season, plus who is in form right now and the current manager |
 | **Players** | Top scorers, assists, goals + assists and saves — among the clubs in this game |
 | **Fixtures** | Recent results with the points they earned, and what's coming up |
 | **This week** | Who gained, who climbed, result of the week, and a summary you can paste into the group chat |
@@ -108,10 +109,13 @@ Histories, honours, legends and managers are **written by hand** in
 [src/lib/clubs.ts](src/lib/clubs.ts) — no free API serves them. Everything else in the club
 view is live.
 
-The manager is the only field that goes stale on its own. Correct one without editing code
-by setting `MANAGERS="110:Some Name,114:Another Name"` in the environment; the ids are ESPN
-team ids. If the draw pool ever changes to a club with no profile written, the view simply
-omits that section rather than breaking.
+Managers are **not** hand-written. They come from Wikidata, which records who is in charge
+and adds an end date when someone leaves, and are re-checked twice a day. This was not
+optional: four of the seven hand-written managers were already wrong within weeks of being
+typed. `MANAGERS="110:Some Name"` still overrides, for when Wikidata is behind the news.
+
+If the draw pool ever changes to a club with no profile written, the view omits that
+section rather than breaking.
 
 ## Setup
 

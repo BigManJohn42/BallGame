@@ -2,6 +2,7 @@ import { awardCatalogue, computeAwards } from "./awards";
 import { clubProfile } from "./clubs";
 import { COMPETITIONS } from "./competitions";
 import { findDerbies } from "./derbies";
+import { buildClubNews } from "./news";
 import { buildHype } from "./hype";
 import {
   DRAW_SEASON,
@@ -27,6 +28,7 @@ import { getStore } from "./store";
 import type {
   Derby,
   Award,
+  ClubNews,
   ClubSeason,
   GameState,
   LeaderboardRow,
@@ -383,4 +385,27 @@ export async function getClubSeason(teamId: number): Promise<ClubSeason | null> 
 export async function getTrackedTeams(): Promise<Team[]> {
   const { trackedTeams } = await assembleSeason();
   return trackedTeams;
+}
+
+/**
+ * Club news for everyone in the game, or one club. Built on demand rather than
+ * with the main state, because goal detail costs a request per fixture.
+ */
+export async function getClubNews(onlyTeamId: number | null): Promise<ClubNews[]> {
+  const { players, trackedTeams, results } = await assembleSeason();
+
+  // Clubs somebody actually holds, unless the game has not started yet.
+  const owned = new Set(players.map((p) => p.teamId));
+  const teams = trackedTeams.filter(
+    (t) => (owned.size === 0 || owned.has(t.id)) && (onlyTeamId === null || t.id === onlyTeamId),
+  );
+
+  const news = await Promise.all(
+    teams.map((team) => buildClubNews({ team, played: results.played })),
+  );
+
+  // Clubs with something to report first, then alphabetically.
+  return news.sort(
+    (a, b) => b.reports.length - a.reports.length || a.teamName.localeCompare(b.teamName),
+  );
 }
