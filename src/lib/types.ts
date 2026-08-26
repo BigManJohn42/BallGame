@@ -245,6 +245,65 @@ export type Derby = {
   awayOwner: string | null;
 };
 
+/** A goal, as reported on the match summary. */
+export type MatchEvent = {
+  kind: string;
+  ownGoal: boolean;
+  penalty: boolean;
+  minute: string;
+  scorer: string;
+  assist: string | null;
+  teamId: number;
+};
+
+/** A short write-up of one finished match, kept for the season. */
+export type MatchReport = {
+  fixtureId: number;
+  teamId: number;
+  teamName: string;
+  teamLogo: string;
+  date: string;
+  competitionId: number;
+  competitionName: string;
+  headline: string;
+  outcome: Outcome;
+  goalsFor: number;
+  goalsAgainst: number;
+  points: number;
+  body: string;
+  scorers: {
+    name: string;
+    minute: string;
+    assist: string | null;
+    penalty: boolean;
+    ownGoal: boolean;
+  }[];
+  /** False when goal detail was not available, so the report is scoreline only. */
+  detailed: boolean;
+};
+
+/** Recent output, as distinct from the season-long leaders. */
+export type FormPlayer = {
+  name: string;
+  goals: number;
+  assists: number;
+  /** goals * 2 + assists, purely to order the list. */
+  points: number;
+};
+
+export type ClubNews = {
+  teamId: number;
+  teamName: string;
+  teamLogo: string;
+  manager: string | null;
+  managerSource: "override" | "wikidata" | "profile" | "unavailable";
+  managerCheckedAt: number;
+  reports: MatchReport[];
+  form: FormPlayer[];
+  /** Matches whose detail has not been fetched yet; they fill in over time. */
+  pending: number;
+};
+
 export type ChatMessage = {
   id: string;
   /** Display name at the time of posting, so a later rename cannot rewrite history. */

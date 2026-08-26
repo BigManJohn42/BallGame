@@ -7,6 +7,7 @@ import DerbyBar from "./DerbyBar";
 import LeaderboardTable from "./LeaderboardTable";
 import LeagueTable from "./LeagueTable";
 import LiveNow from "./LiveNow";
+import NewsPanel from "./NewsPanel";
 import PlayersPanel from "./PlayersPanel";
 import SummaryPanel from "./SummaryPanel";
 import { Fixtures, Results } from "./MatchFeed";
@@ -19,6 +20,7 @@ const SPIN_MS = 1900;
 const TABS = [
   { id: "leaderboard", label: "Leaderboard" },
   { id: "table", label: "Serie A" },
+  { id: "news", label: "News" },
   { id: "players", label: "Players" },
   { id: "matches", label: "Fixtures" },
   { id: "summary", label: "This week" },
@@ -378,6 +380,8 @@ export default function Game({ initial }: { initial: GameState }) {
             />
           </>
         ) : null}
+
+        {tab === "news" ? <NewsPanel meta={state.meta} onPick={setOpenClub} /> : null}
 
         {tab === "players" ? <PlayersPanel onPick={setOpenClub} /> : null}
 
