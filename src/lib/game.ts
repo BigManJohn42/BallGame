@@ -2,6 +2,7 @@ import { awardCatalogue, computeAwards } from "./awards";
 import { clubProfile } from "./clubs";
 import { COMPETITIONS } from "./competitions";
 import { findDerbies } from "./derbies";
+import { discordConfig } from "./discord";
 import { buildClubNews } from "./news";
 import { buildHype } from "./hype";
 import {
@@ -279,7 +280,13 @@ async function assembleSeason() {
     }),
   );
 
+  const discord = discordConfig();
   const notices = [...storeErrors, ...pool.notices, ...results.notices, ...bonus.notices];
+  if (discord.malformed) {
+    notices.push(
+      "DISCORD_INVITE is set but does not look like an invite link. It should read https://discord.gg/xxxxxx.",
+    );
+  }
   if (store.kind === "memory") {
     notices.push(
       "No Redis connected: players and scores live in memory only and will vanish between deploys. Add an Upstash/Vercel KV store for real persistence.",
@@ -287,6 +294,7 @@ async function assembleSeason() {
   }
 
   return {
+    discord,
     store,
     pool,
     players,
@@ -303,7 +311,8 @@ async function assembleSeason() {
 /** Everything the front page renders, in a single round trip. */
 export async function getGameState(me: Player | null): Promise<GameState> {
   const s = await assembleSeason();
-  const { store, pool, players, results, leaderboard, table, summary, derbies, notices } = s;
+  const { store, pool, players, results, leaderboard, table, summary, derbies, discord, notices } =
+    s;
 
   // Show only clubs somebody actually holds once the game has started; before
   // that, show the whole pool so the page is not empty on arrival.
@@ -337,6 +346,7 @@ export async function getGameState(me: Player | null): Promise<GameState> {
         accent: c.accent,
       })),
       bonuses: { goal: GOAL_BONUS, cleanSheet: CLEAN_SHEET_BONUS },
+      discord: { invite: discord.invite, label: discord.label },
       awardCatalogue: awardCatalogue(),
       notices,
     },

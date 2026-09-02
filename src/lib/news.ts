@@ -1,5 +1,5 @@
 import { clubProfile } from "./clubs";
-import { cachedMatchEvents, getMatchEvents } from "./football";
+import { cachedMatchEvents, getClubHeadlines, getMatchEvents } from "./football";
 import { managerFor } from "./managers";
 import { buildReport, inForm } from "./reports";
 import type { ClubNews, MatchEvent, PlayedMatch, Team } from "./types";
@@ -59,6 +59,8 @@ export async function buildClubNews(input: {
     events: entry.events ?? fetched.get(entry.match.fixtureId) ?? null,
   }));
 
+  const headlines = await getClubHeadlines(input.team.id).catch(() => []);
+
   const manager = await managerFor(input.team.id).catch(() => ({
     name: null,
     source: "unavailable" as const,
@@ -73,6 +75,7 @@ export async function buildClubNews(input: {
     manager: manager.name ?? written,
     managerSource: manager.name ? manager.source : written ? "profile" : "unavailable",
     managerCheckedAt: manager.checkedAt,
+    headlines,
     reports: withEvents.map(({ match, events }) =>
       buildReport({
         match,

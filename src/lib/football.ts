@@ -5,6 +5,7 @@ import type {
   DataSource,
   HeadToHead,
   HeadToHeadMeeting,
+  Headline,
   LeagueRow,
   LiveMatch,
   MatchEvent,
@@ -950,6 +951,63 @@ export async function getHeadToHead(
     return data;
   } catch {
     return null;
+  }
+}
+
+/* -------------------------------------------------------------- headlines */
+
+const HEADLINES_TTL = envInt("HEADLINES_TTL", 60 * 60);
+
+type RawArticle = {
+  headline?: string;
+  description?: string;
+  published?: string;
+  type?: string;
+  links?: { web?: { href?: string } };
+};
+
+/** Rough bucket from the wording, so transfer talk can be surfaced separately. */
+function classify(headline: string, description: string, type: string): Headline["kind"] {
+  const text = `${headline} ${description}`.toLowerCase();
+  if (/\btransfer|sign(ing|ed|s)?\b|\bdeal\b|\bloan\b|\bbid\b|\bmove to\b|\bjoins?\b|\bswoop|\bfee\b/.test(text)) {
+    return "transfer";
+  }
+  if (/^recap$/i.test(type) || /\bhighlights\b|\bfull[- ]time\b/.test(text)) return "report";
+  if (/\binjur|\bfitness\b|\bout for\b|\bsidelined\b|\bdoubt\b/.test(text)) return "injury";
+  if (/\bpreview\b|\bhow to watch\b|\bteam news\b|\blineups?\b/.test(text)) return "preview";
+  return "story";
+}
+
+/**
+ * ESPN's club news feed. Real headlines with dates and links, refreshed hourly.
+ * Coverage is ESPN's own relevance model, so a big competition story can show
+ * against several clubs at once — these are not exclusives.
+ */
+export async function getClubHeadlines(teamId: number): Promise<Headline[]> {
+  try {
+    const { data } = await swr(`headlines:${teamId}`, HEADLINES_TTL, async () => {
+      const payload = (await espn(
+        `${ESPN_SITE}/${SERIE_A.slug}/news?team=${teamId}&limit=12`,
+      )) as { articles?: RawArticle[] };
+
+      const out: Headline[] = [];
+      for (const article of payload?.articles ?? []) {
+        const headline = article.headline?.trim();
+        if (!headline) continue;
+        out.push({
+          headline,
+          description: article.description?.trim() ?? "",
+          published: article.published ?? "",
+          url: article.links?.web?.href ?? null,
+          kind: classify(headline, article.description ?? "", article.type ?? ""),
+        });
+      }
+      out.sort((a, b) => b.published.localeCompare(a.published));
+      return out;
+    });
+    return data;
+  } catch {
+    return [];
   }
 }
 

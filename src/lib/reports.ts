@@ -1,3 +1,16 @@
+import {
+  assistPhrase,
+  blankedPhrase,
+  cleanSheetPhrase,
+  haulPhrase,
+  latePhrase,
+  opener,
+  pointsPhrase,
+  repliedVerb,
+  scoredVerb,
+  seedFrom,
+  shapeOf,
+} from "./voice";
 import type { FormPlayer, MatchEvent, MatchReport, PlayedMatch } from "./types";
 
 /**
@@ -33,15 +46,16 @@ function scorerPhrase(events: MatchEvent[]): string {
  */
 function goalSentences(
   events: MatchEvent[],
-  scoredVerb: string,
+  verb: string,
   fallbackCount: number,
+  seed: number,
 ): { scored: string | null; assists: string | null; own: string | null } {
   const proper = events.filter((e) => !e.ownGoal);
   const own = events.filter((e) => e.ownGoal);
 
   let scored: string | null = null;
   if (proper.length) {
-    scored = `${scorerPhrase(proper)} ${scoredVerb}.`;
+    scored = `${scorerPhrase(proper)} ${verb}.`;
   } else if (!events.length && fallbackCount > 0) {
     // The goals went in but this fixture has no event detail.
     scored =
@@ -56,13 +70,17 @@ function goalSentences(
 
   return {
     scored,
-    assists: names.length
-      ? `${list(names)} provided the ${names.length > 1 ? "assists" : "assist"}.`
-      : null,
+    assists: names.length ? assistPhrase(list(names), names.length > 1, seed) : null,
     own: own.length
       ? `${own.length > 1 ? "Own goals" : "An own goal"} from ${scorerPhrase(own)}.`
       : null,
   };
+}
+
+/** "88'" or "90'+3'" counts as late; "8'" does not. */
+function lateMinute(minute: string): boolean {
+  const first = Number.parseInt(minute.replace(/[^0-9].*$/, ""), 10);
+  return Number.isFinite(first) && first >= 85;
 }
 
 export function buildReport(input: {
@@ -85,42 +103,54 @@ export function buildReport(input: {
     ? `${teamName} ${match.goalsFor}-${match.goalsAgainst} ${match.opponent}`
     : `${match.opponent} ${match.goalsAgainst}-${match.goalsFor} ${teamName}`;
 
+  // Seeded on the fixture, so a given match always reads the same way.
+  const seed = seedFrom(`${match.fixtureId}:${match.teamId}`);
+  const shape = shapeOf(match);
   const sentences: string[] = [];
 
-  const verdict =
-    match.outcome === "W"
-      ? match.viaPenalties
-        ? "through on penalties"
-        : "a win"
-      : match.outcome === "D"
-        ? "a draw"
-        : match.viaPenalties
-          ? "out on penalties"
-          : "a defeat";
+  // The competition is already on the card above the body, so it is left out
+  // here rather than trailing the opener as a fragment.
+  sentences.push(opener(shape, match.home ? "at home to" : "away at", match.opponent, seed));
 
-  sentences.push(
-    `${verdict[0].toUpperCase()}${verdict.slice(1)} ${
-      match.home ? "at home to" : "away at"
-    } ${match.opponent} in the ${match.competitionName}.`,
-  );
-
-  if (match.goalsFor === 0) {
-    sentences.push("No goals at the right end.");
-  } else {
-    const us = goalSentences(ours, "scored", match.goalsFor);
+  if (match.goalsFor > 0) {
+    const us = goalSentences(ours, scoredVerb(seed), match.goalsFor, seed);
     sentences.push(...[us.scored, us.assists, us.own].filter((s): s is string => Boolean(s)));
+
+    // Call out a brace or better rather than leaving it buried in a list.
+    const counts = new Map<string, number>();
+    for (const e of ours.filter((e) => !e.ownGoal)) {
+      counts.set(e.scorer, (counts.get(e.scorer) ?? 0) + 1);
+    }
+    for (const [name, goals] of counts) {
+      const haul = haulPhrase(name, goals, seed);
+      if (haul) sentences.push(haul);
+    }
+
+    // Only a late goal that actually decided it earns a line. Any other one is
+    // already in the scorer list with its minute, so saying it twice reads as
+    // padding.
+    const decisive = match.outcome === "W" && match.goalsFor - match.goalsAgainst === 1;
+    const late = ours.find((e) => !e.ownGoal && lateMinute(e.minute));
+    if (late && decisive) {
+      sentences.push(latePhrase(late.minute, late.scorer, true, seed));
+    }
   }
 
-  if (match.goalsAgainst === 0) {
-    sentences.push("A clean sheet at the back.");
-  } else {
-    const them = goalSentences(theirs, "replied", match.goalsAgainst);
+  if (match.goalsFor === 0) sentences.push(blankedPhrase(seed));
+
+  if (match.goalsAgainst === 0 && match.goalsFor > 0) {
+    sentences.push(cleanSheetPhrase(seed));
+  } else if (match.goalsAgainst > 0) {
+    const them = goalSentences(
+      theirs,
+      repliedVerb(seed, match.goalsAgainst > 1, match.goalsFor > 0),
+      match.goalsAgainst,
+      seed,
+    );
     sentences.push(...[them.scored, them.own].filter((s): s is string => Boolean(s)));
   }
 
-  sentences.push(
-    `Worth ${match.points} ${match.points === 1 ? "point" : "points"}.`,
-  );
+  sentences.push(pointsPhrase(match.points, seed));
 
   return {
     fixtureId: match.fixtureId,
