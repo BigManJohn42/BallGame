@@ -50,11 +50,20 @@ export function seasonLabel(season: number): string {
 }
 
 /**
- * A season runs July to June. ESPN rejects a `dates` range longer than a year,
- * so this stops just short of one.
+ * A season runs July to June, but ESPN no longer accepts a `dates=A-B` range on
+ * the soccer scoreboard: every range, however short, now answers
+ * 400 "Failed to get events endpoint.". A bare `dates=YYYY` still works and
+ * returns that CALENDAR year, so one season straddles two of them. Both get
+ * fetched and the events are then kept by season.
  */
-function seasonWindow(season: number): string {
-  return `${season}0701-${season + 1}0629`;
+function seasonYears(season: number): number[] {
+  return [season, season + 1];
+}
+
+/** Fallback for an event ESPN has not tagged with a season of its own. */
+function withinSeason(date: string, season: number): boolean {
+  const at = Date.parse(date);
+  return Number.isFinite(at) && at >= Date.UTC(season, 6, 1) && at < Date.UTC(season + 1, 6, 1);
 }
 
 function logoFor(teamId: number): string {
@@ -289,7 +298,7 @@ type RawCompetitor = {
 type RawEvent = {
   id?: string;
   date?: string;
-  season?: { slug?: string };
+  season?: { year?: number; slug?: string };
   status?: {
     displayClock?: string;
     type?: { state?: string; completed?: boolean; description?: string };
@@ -316,11 +325,19 @@ function readSide(competitor: RawCompetitor | undefined): CachedSide | null {
   };
 }
 
-function readScoreboard(payload: unknown): CachedMatch[] {
+function readScoreboard(payload: unknown, season: number): CachedMatch[] {
   const events = (payload as { events?: RawEvent[] })?.events ?? [];
   const matches: CachedMatch[] = [];
 
   for (const event of events) {
+    // A calendar year holds the tail of one season and the start of the next,
+    // so the neighbouring campaigns have to be dropped. ESPN tags every event
+    // with the season it belongs to, which beats guessing from the date.
+    const tagged = event.season?.year;
+    const mine =
+      typeof tagged === "number" ? tagged === season : withinSeason(event.date ?? "", season);
+    if (!mine) continue;
+
     const competitors = event?.competitions?.[0]?.competitors ?? [];
     const home = readSide(competitors.find((c) => c.homeAway === "home"));
     const away = readSide(competitors.find((c) => c.homeAway === "away"));
@@ -342,16 +359,27 @@ function readScoreboard(payload: unknown): CachedMatch[] {
   return matches;
 }
 
+/** One competition's whole season, stitched from the calendar years it spans. */
+async function seasonScoreboard(slug: string, season: number): Promise<CachedMatch[]> {
+  const pages = await Promise.all(
+    seasonYears(season).map((year) =>
+      espn(`${ESPN_SITE}/${slug}/scoreboard?dates=${year}&limit=1000`),
+    ),
+  );
+
+  // A match near the turn of the year can come back from both calls.
+  const byId = new Map<string, CachedMatch>();
+  for (const page of pages) {
+    for (const match of readScoreboard(page, season)) byId.set(match.id, match);
+  }
+  return [...byId.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 async function competitionMatches(
   competition: Competition,
 ): Promise<{ data: CachedMatch[]; at: number; error: string | null }> {
-  const window = seasonWindow(TRACK_SEASON);
-  return swr(`espn:${competition.slug}:${window}`, FIXTURES_TTL, async () =>
-    readScoreboard(
-      await espn(
-        `${ESPN_SITE}/${competition.slug}/scoreboard?dates=${window}&limit=1000`,
-      ),
-    ),
+  return swr(`espn:${competition.slug}:season-${TRACK_SEASON}`, FIXTURES_TTL, () =>
+    seasonScoreboard(competition.slug, TRACK_SEASON),
   );
 }
 
@@ -1131,27 +1159,25 @@ export async function getLeagueTable(): Promise<{
 /** Drops the cached scoreboards so the next read refetches from ESPN. */
 export async function invalidateResults(): Promise<void> {
   const store = getStore();
-  const window = seasonWindow(TRACK_SEASON);
   await Promise.all(
-    COMPETITIONS.map((c) => store.cacheDrop(`espn:${c.slug}:${window}`)),
+    COMPETITIONS.map((c) => store.cacheDrop(`espn:${c.slug}:season-${TRACK_SEASON}`)),
   );
 }
 
 /** Setup helper behind /api/leagues: checks all six slugs actually resolve. */
 export async function checkCompetitions(): Promise<unknown> {
-  const window = seasonWindow(TRACK_SEASON);
   return Promise.all(
     COMPETITIONS.map(async (c) => {
       try {
         const payload = (await espn(
-          `${ESPN_SITE}/${c.slug}/scoreboard?dates=${window}&limit=1000`,
-        )) as { leagues?: { name?: string }[]; events?: unknown[] };
+          `${ESPN_SITE}/${c.slug}/scoreboard?dates=${TRACK_SEASON}&limit=1000`,
+        )) as { leagues?: { name?: string }[] };
         return {
           name: c.name,
           slug: c.slug,
           ok: true,
           providerName: payload?.leagues?.[0]?.name ?? null,
-          fixtures: payload?.events?.length ?? 0,
+          fixtures: (await seasonScoreboard(c.slug, TRACK_SEASON)).length,
         };
       } catch (err) {
         return {
