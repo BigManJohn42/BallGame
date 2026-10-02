@@ -261,6 +261,7 @@ async function assembleSeason() {
           topScorerFor(derby.awayTeamId),
         ]);
         derby.hype = buildHype({
+          fixtureId: derby.fixtureId,
           homeTeamId: derby.homeTeamId,
           homeName: derby.homeName,
           homeOwner: derby.homeOwner,
