@@ -111,6 +111,30 @@ export default function NewsPanel({
             </span>
           </div>
 
+          {club.headlines.length ? (
+            <div className="panel headlines">
+              <div className="form-head">Around the club</div>
+              {club.headlines.slice(0, 5).map((h) => (
+                <a
+                  className="headline"
+                  key={h.headline}
+                  href={h.url ?? undefined}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  <span className={`kind kind-${h.kind}`}>{h.kind}</span>
+                  <span className="headline-main">
+                    <b>{h.headline}</b>
+                    {h.description ? <em>{h.description}</em> : null}
+                  </span>
+                  <span className="headline-date" suppressHydrationWarning>
+                    {h.published ? dateFmt.format(new Date(h.published)) : ""}
+                  </span>
+                </a>
+              ))}
+            </div>
+          ) : null}
+
           {club.form.length ? (
             <div className="panel form-panel">
               <div className="form-head">In form — last few matches</div>

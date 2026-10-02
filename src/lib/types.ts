@@ -282,6 +282,15 @@ export type MatchReport = {
   detailed: boolean;
 };
 
+/** A club news item from the provider feed. */
+export type Headline = {
+  headline: string;
+  description: string;
+  published: string;
+  url: string | null;
+  kind: "transfer" | "report" | "injury" | "preview" | "story";
+};
+
 /** Recent output, as distinct from the season-long leaders. */
 export type FormPlayer = {
   name: string;
@@ -299,6 +308,7 @@ export type ClubNews = {
   managerSource: "override" | "wikidata" | "profile" | "unavailable";
   managerCheckedAt: number;
   reports: MatchReport[];
+  headlines: Headline[];
   form: FormPlayer[];
   /** Matches whose detail has not been fetched yet; they fill in over time. */
   pending: number;
@@ -347,6 +357,7 @@ export type GameState = {
       accent: string;
     }[];
     bonuses: { goal: number; cleanSheet: number };
+    discord: { invite: string | null; label: string };
     awardCatalogue: {
       stat: { label: string; points: number }[];
       rounds: { label: string; points: number }[];

@@ -218,6 +218,17 @@ export default function Game({ initial }: { initial: GameState }) {
           <span className="tag">
             {state.leaderboard.length} player{state.leaderboard.length === 1 ? "" : "s"}
           </span>
+          {state.meta.discord.invite ? (
+            <a
+              className="btn btn-discord"
+              href={state.meta.discord.invite}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              <span aria-hidden>💬</span>
+              {state.meta.discord.label}
+            </a>
+          ) : null}
           <button className="btn btn-ghost" onClick={refresh} disabled={busy}>
             Refresh
           </button>

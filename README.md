@@ -165,8 +165,7 @@ A daily Vercel cron warms it all.
 
 ## Running locally
 
-Needs Node 20+ (it is not currently installed on this machine — grab it from
-[nodejs.org](https://nodejs.org)).
+Needs Node 22.6+ — the tests run the TypeScript sources directly, with no build step.
 
 ```bash
 npm install
@@ -181,6 +180,44 @@ which is what you want for local poking.
 
 Want to see a full leaderboard immediately instead of a table that has barely kicked off?
 Set `TRACK_SEASON=2025` and it scores the completed 2025/26 season instead.
+
+### Tests
+
+```bash
+npm test
+```
+
+Node's own test runner, no framework. The suites cover the parts that are easy to get
+quietly wrong: who a goal belongs to, and whether the generated prose ever contradicts
+the scoreline it is describing. They assert facts rather than exact sentences, because
+the wording is generated and pinning it would only test the grammar's current mood.
+
+```bash
+npm run typecheck
+```
+
+## How the write-ups are written
+
+Match reports and head-to-head blurbs are generated, not filled in. `src/lib/grammar.ts`
+is a small context-free grammar engine; `src/lib/voice.ts` holds the vocabulary — verbs,
+evaluations, codas, venue phrases. Nothing in there is a finished sentence, so a report is
+assembled per match rather than picked from a list: around 700 distinct openings across
+the match shapes, and thousands of distinct whole reports.
+
+Two things keep it sane. Each writer is **seeded** on the fixture id, so a given match
+always reads the same way — prose that reshuffled on every page load would read as a bug.
+And a writer **remembers what it has already used**, so one report works through a
+symbol's options before coming back to one, which is what stops three sentences in a row
+all saying "scored".
+
+Only the wording is generated. Names, minutes, scores and points are passed in as values,
+and the vocabulary deliberately never claims anything the data does not support — no
+"deserved it", no "never looked like scoring". Where ESPN's event list covers only some of
+a match's goals, the report says so rather than quietly contradicting its own scoreline.
+
+The exception is the rivalry notes in `src/lib/hype.ts`, which are written by hand. A
+grammar would happily invent a reason two clubs dislike each other, and that is not the
+kind of thing to make up.
 
 ## API
 
