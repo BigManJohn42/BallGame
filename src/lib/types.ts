@@ -280,6 +280,8 @@ export type MatchReport = {
   }[];
   /** False when goal detail was not available, so the report is scoreline only. */
   detailed: boolean;
+  /** Who wrote the body: the local grammar, or a model over the same facts. */
+  written: "generated" | "ai";
 };
 
 /** A club news item from the provider feed. */
@@ -309,6 +311,8 @@ export type ClubNews = {
   managerCheckedAt: number;
   reports: MatchReport[];
   headlines: Headline[];
+  /** A short AI-written note over the headlines above, when AI is enabled. */
+  digest: string | null;
   form: FormPlayer[];
   /** Matches whose detail has not been fetched yet; they fill in over time. */
   pending: number;

@@ -2349,3 +2349,25 @@ button.club-link:hover span:first-of-type {
     margin-left: auto;
   }
 }
+
+/* ------------------------------------------------------------ ai digest */
+
+.digest {
+  margin: 0 0 4px;
+  padding: 11px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: rgba(56, 189, 248, 0.07);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.digest-note {
+  display: block;
+  margin-top: 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--dim);
+}
