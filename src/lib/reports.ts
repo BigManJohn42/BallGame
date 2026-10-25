@@ -241,6 +241,7 @@ export function buildReport(input: {
       ownGoal: e.ownGoal,
     })),
     detailed: events.length > 0,
+    written: "generated",
   };
 }
 

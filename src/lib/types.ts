@@ -153,6 +153,8 @@ export type WeeklySummary = {
   } | null;
   /** Plain text, ready to paste into a group chat. */
   text: string;
+  /** A short AI-written note over the table above, when AI is enabled. */
+  roundup: string | null;
 };
 
 /** One player's tally in a statistical category, among the game's clubs. */
@@ -223,6 +225,8 @@ export type DerbyHype = {
   rivalryNote: string | null;
   blurb: string;
   facts: { label: string; value: string }[];
+  /** Who wrote the blurb: the local grammar, or a model over the same facts. */
+  written: "generated" | "ai";
 };
 
 /**
@@ -280,6 +284,8 @@ export type MatchReport = {
   }[];
   /** False when goal detail was not available, so the report is scoreline only. */
   detailed: boolean;
+  /** Who wrote the body: the local grammar, or a model over the same facts. */
+  written: "generated" | "ai";
 };
 
 /** A club news item from the provider feed. */
@@ -309,6 +315,8 @@ export type ClubNews = {
   managerCheckedAt: number;
   reports: MatchReport[];
   headlines: Headline[];
+  /** A short AI-written note over the headlines above, when AI is enabled. */
+  digest: string | null;
   form: FormPlayer[];
   /** Matches whose detail has not been fetched yet; they fill in over time. */
   pending: number;

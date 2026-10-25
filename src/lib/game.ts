@@ -4,7 +4,15 @@ import { COMPETITIONS } from "./competitions";
 import { findDerbies } from "./derbies";
 import { discordConfig } from "./discord";
 import { buildClubNews } from "./news";
+import { aiEnabled, budgeter, write } from "./ai";
 import { buildHype } from "./hype";
+import {
+  HYPE_SYSTEM,
+  PROMPT_VERSION,
+  ROUNDUP_SYSTEM,
+  hypeFacts,
+  roundupFacts,
+} from "./prompts";
 import {
   DRAW_SEASON,
   TRACK_SEASON,
@@ -280,6 +288,72 @@ async function assembleSeason() {
       }
     }),
   );
+
+  // With a key set, the same facts are written up by a model instead. The
+  // local write-up is already in place, so a failure here changes nothing.
+  if (aiEnabled()) {
+    const spend = budgeter();
+    await Promise.all(
+      derbies.map(async (derby) => {
+        const hype = derby.hype;
+        if (!hype) return;
+
+        const facts = hypeFacts({
+          homeName: derby.homeName,
+          awayName: derby.awayName,
+          homeOwner: derby.homeOwner,
+          awayOwner: derby.awayOwner,
+          competition: derby.competitionName,
+          rivalry: hype.rivalry,
+          rivalryNote: hype.rivalryNote,
+          tableLine: hype.facts.find((f) => f.label === "In the table")?.value ?? null,
+          headToHead: hype.facts.find((f) => f.label === "Head-to-head")?.value ?? null,
+          lastMeeting: hype.facts.find((f) => f.label === "Last meeting")?.value ?? null,
+          scorers: (hype.facts.find((f) => f.label === "Leading scorers")?.value ?? "")
+            .split(" · ")
+            .filter(Boolean),
+        });
+
+        const text = await write({
+          cacheKey: `v${PROMPT_VERSION}:hype:${derby.fixtureId}`,
+          system: HYPE_SYSTEM,
+          user: facts,
+          // The owners' names are chosen by the players themselves and will not
+          // be in the facts as words, so they are allowed explicitly.
+          facts: `${facts} ${derby.homeOwner ?? ""} ${derby.awayOwner ?? ""}`,
+          spend,
+          maxTokens: 500,
+        });
+
+        if (text) {
+          hype.blurb = text;
+          hype.written = "ai";
+        }
+      }),
+    );
+
+    // The panel only renders once there is a previous gameweek to compare
+    // against, so writing one before that would pay for text nobody sees.
+    if (summary.since && summary.standings.length) {
+      const facts = roundupFacts({
+        standings: summary.standings,
+        matchesPlayed: summary.matchesPlayed,
+        bestResult: summary.bestResult,
+      });
+      summary.roundup = await write({
+        // Keyed on the week and what was in it, so it is rewritten when the
+        // results move and reused when they have not.
+        cacheKey: `v${PROMPT_VERSION}:roundup:${summary.since ?? 0}:${summary.matchesPlayed}:${summary.standings
+          .map((r) => `${r.name}:${r.points}`)
+          .join(",")}`,
+        system: ROUNDUP_SYSTEM,
+        user: facts,
+        facts,
+        spend,
+        maxTokens: 500,
+      });
+    }
+  }
 
   const discord = discordConfig();
   const notices = [...storeErrors, ...pool.notices, ...results.notices, ...bonus.notices];

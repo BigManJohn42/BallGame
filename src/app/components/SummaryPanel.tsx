@@ -27,6 +27,13 @@ export default function SummaryPanel({ summary }: { summary: WeeklySummary }) {
 
   return (
     <>
+      {summary.roundup ? (
+        <p className="digest roundup">
+          {summary.roundup}
+          <span className="digest-note">written from the table below</span>
+        </p>
+      ) : null}
+
       <div className="highlights">
         <div className="panel highlight">
           <div className="label">Most points</div>

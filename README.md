@@ -219,6 +219,38 @@ The exception is the rivalry notes in `src/lib/hype.ts`, which are written by ha
 grammar would happily invent a reason two clubs dislike each other, and that is not the
 kind of thing to make up.
 
+### Letting a model write them instead
+
+Set `OPENROUTER_API_KEY` and the match reports and a short club-news note are written by
+a model instead. Everything else is unchanged, including the facts: the model is given the
+scorers, minutes, assists and real published headlines the app already has, and told to
+add nothing.
+
+It is a writer, not a source. It is never asked what happened, because a model asked about
+football will supply a plausible stadium, a plausible scorer and a plausible transfer, none
+of which a reader can check. Two guards sit behind that: the prompts list the facts and
+forbid anything else, and output mentioning a name that was not in the input is discarded
+rather than shown. That check was written against a real failure — one model volunteered
+the correct stadium nobody had given it, and called the away side "the hosts".
+
+Everything degrades. No key, a failed call, a timeout, a spent budget or ungrounded output,
+and the locally generated prose is used instead. Reports are cached for months, so a match
+is written once; a per-request budget means a cold cache fills in over a few visits rather
+than stalling the first one. Writing a full season for seven clubs costs a few pence.
+
+Transfers, injuries and club stories still come from ESPN's published feed, which is where
+the headlines on the News tab come from. The model summarises those headlines; it is not
+asked to recall transfer news of its own.
+
+The same applies to the head-to-head previews and the weekly round-up. A preview is written
+from the head-to-head record, the live table, the last meeting and the leading scorers, plus
+the rivalry note where there is one — that note is researched history, so the model may draw
+on it but not extend it. The round-up is written from the table and what each owner gained.
+Neither is asked to predict anything.
+
+The pasteable standings block is deliberately left alone. People copy it into a chat, and a
+format that moved around every week would be worse, not better.
+
 ## API
 
 | Route                     | What it does                                                   |

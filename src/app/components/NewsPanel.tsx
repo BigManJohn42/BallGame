@@ -114,6 +114,14 @@ export default function NewsPanel({
           {club.headlines.length ? (
             <div className="panel headlines">
               <div className="form-head">Around the club</div>
+              {club.digest ? (
+                <p className="digest">
+                  {club.digest}
+                  <span className="digest-note">
+                    written from the headlines below
+                  </span>
+                </p>
+              ) : null}
               {club.headlines.slice(0, 5).map((h) => (
                 <a
                   className="headline"
