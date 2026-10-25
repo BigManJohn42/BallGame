@@ -251,6 +251,27 @@ Neither is asked to predict anything.
 The pasteable standings block is deliberately left alone. People copy it into a chat, and a
 format that moved around every week would be worse, not better.
 
+### The club bot
+
+Bottom right, next to the chat. Pick one of the seven clubs and ask it things — how the
+season is going, who has been scoring, who the manager is, how hard the next run of
+fixtures looks, what the news is.
+
+It is a real conversation with a model, but every question goes up with that club's actual
+record, league position, fixtures, leading scorers, manager and published headlines
+attached, and the instruction to answer from those and say so otherwise. That last part is
+the point. Asked for a squad list it will tell you it does not have one, rather than
+reciting the squad from whenever its training data stopped — which is the failure that
+matters here, because a plausible wrong answer about your own club is indistinguishable
+from a right one.
+
+Fixture difficulty is each opponent's actual league position and points. There is no
+difficulty score, because nobody publishes one, and it will not predict results.
+
+Costs are capped here in a way they are not elsewhere, since the input is people rather
+than data: a length limit on questions, a few seconds' cooldown each, and a bounded
+history.
+
 ## API
 
 | Route                     | What it does                                                   |

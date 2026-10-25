@@ -114,7 +114,7 @@ export function isGrounded(text: string, facts: string): boolean {
 
 /* ------------------------------------------------------------ the client */
 
-type Message = { role: "system" | "user"; content: string };
+export type Message = { role: "system" | "user" | "assistant"; content: string };
 
 async function call(messages: Message[], maxTokens: number): Promise<string | null> {
   const key = process.env.OPENROUTER_API_KEY;
@@ -204,6 +204,27 @@ export async function write(input: {
 
   await store.cacheSet(key, { text }, CACHE_TTL).catch(() => {});
   return text;
+}
+
+/**
+ * A back-and-forth, for the club bot. Unlike write() this is not cached — the
+ * question differs every time — and it carries the earlier turns, so a
+ * follow-up like "and the one before that?" still makes sense.
+ *
+ * Returns null on any failure, which the caller turns into a visible message:
+ * a bot that answers most of the time and goes quiet the rest is worse than
+ * one that admits it is stuck.
+ */
+export async function converse(input: {
+  system: string;
+  messages: Message[];
+  maxTokens?: number;
+}): Promise<string | null> {
+  if (!aiEnabled()) return null;
+  return call(
+    [{ role: "system", content: input.system }, ...input.messages],
+    input.maxTokens ?? 700,
+  );
 }
 
 /**

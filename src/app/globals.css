@@ -2375,3 +2375,187 @@ button.club-link:hover span:first-of-type {
 .roundup {
   margin-bottom: 18px;
 }
+
+/* ------------------------------------------------------------- club bot */
+
+.ask-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 60;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: linear-gradient(140deg, #0c3a52, #072235);
+  color: var(--text);
+  box-shadow: 0 16px 34px -14px rgba(0, 0, 0, 0.9);
+  transition: transform 0.14s, border-color 0.14s;
+}
+
+.ask-fab:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.8);
+}
+
+.ask-fab-open {
+  background: var(--panel-2);
+  border-color: var(--line-strong);
+  font-size: 15px;
+}
+
+.ask-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 84px;
+  z-index: 60;
+  width: 380px;
+  max-width: calc(100vw - 40px);
+  height: 520px;
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.85);
+  animation: pop 0.16s ease-out;
+  overflow: hidden;
+}
+
+.ask-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.ask-head strong {
+  font-size: 14px;
+}
+
+.ask-club {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.ask-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ask-intro p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.ask-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.ask-chip {
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
+}
+
+.ask-chip:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+  color: var(--text);
+}
+
+.ask-turn {
+  max-width: 88%;
+  padding: 9px 12px;
+  border-radius: 13px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ask-user {
+  align-self: flex-end;
+  background: rgba(61, 220, 132, 0.14);
+  border: 1px solid rgba(61, 220, 132, 0.3);
+  border-bottom-right-radius: 4px;
+}
+
+.ask-assistant {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 4px;
+}
+
+.ask-thinking {
+  color: var(--dim);
+  font-style: italic;
+}
+
+.ask-error {
+  margin: 0;
+  padding: 0 14px 8px;
+  color: var(--danger);
+  font-size: 12.5px;
+  flex: none;
+}
+
+.ask-form {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  flex: none;
+}
+
+.ask-form .input {
+  flex: 1;
+  font-size: 14px;
+  padding: 9px 12px;
+}
+
+.ask-note {
+  margin: 0;
+  padding: 0 14px 12px;
+  color: var(--dim);
+  font-size: 10.5px;
+  line-height: 1.45;
+  flex: none;
+}
+
+@media (max-width: 520px) {
+  .ask-panel {
+    right: 10px;
+    left: 10px;
+    width: auto;
+    max-width: none;
+  }
+}
