@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import AskBot from "./AskBot";
 import ChatDock from "./ChatDock";
 import ClubPanel from "./ClubPanel";
 import DerbyBar from "./DerbyBar";
@@ -429,6 +430,7 @@ export default function Game({ initial }: { initial: GameState }) {
       </section>
 
       <ChatDock state={state} />
+      <AskBot state={state} />
 
       {openClub !== null ? (
         <ClubPanel
