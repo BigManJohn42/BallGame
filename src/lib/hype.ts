@@ -177,5 +177,6 @@ export function buildHype(input: {
     rivalryNote: rivalry?.note ?? null,
     blurb: sentences.join(" "),
     facts,
+    written: "generated",
   };
 }

@@ -4,7 +4,7 @@ import type { Headline, MatchEvent, PlayedMatch } from "./types";
  * Bumped whenever the wording below changes, so cached text written under an
  * older prompt is regenerated rather than lingering.
  */
-export const PROMPT_VERSION = 2;
+export const PROMPT_VERSION = 4;
 
 /**
  * What the model is told. Kept apart from the client so the wording of a
@@ -101,6 +101,87 @@ export function digestFacts(input: { teamName: string; headlines: Headline[] }):
   const lines = [`Club: ${input.teamName}`, "", "Published headlines:"];
   for (const h of input.headlines.slice(0, 8)) {
     lines.push(`- [${h.kind}] ${h.headline}${h.description ? ` — ${h.description}` : ""}`);
+  }
+  return lines.join("\n");
+}
+
+/* -------------------------------------------------------------- the hype */
+
+export const HYPE_SYSTEM = `You write a short preview for an upcoming fixture in a side game where a group of friends each own a Serie A club and score points from real results. Two of their clubs are about to play each other, so whatever one owner gains, the other does not.
+
+${NO_INVENTION} The head-to-head record, the league positions, the last meeting and the leading scorers are all given; use them and nothing else. If a rivalry note is included it is researched history and may be drawn on, but do not extend it with history of your own.
+
+Do not predict a result or a scoreline, and do not say who should win.
+
+Name both owners where they are given, early, and frame it as a meeting between them — the clubs are what they own, and the needle is between the two people. Only fall back to club names alone where an owner is not given.
+
+Write one paragraph, 3 to 4 sentences, British football prose with a bit of needle. No heading, no list, no emoji, no markdown, no line breaks, no second person.
+
+Output the preview and nothing else.`;
+
+export function hypeFacts(input: {
+  homeName: string;
+  awayName: string;
+  homeOwner: string | null;
+  awayOwner: string | null;
+  competition: string;
+  rivalry: string | null;
+  rivalryNote: string | null;
+  tableLine: string | null;
+  headToHead: string | null;
+  lastMeeting: string | null;
+  scorers: string[];
+}): string {
+  return [
+    `Home club: ${input.homeName}${input.homeOwner ? ` — owned by ${input.homeOwner}` : ""}`,
+    `Away club: ${input.awayName}${input.awayOwner ? ` — owned by ${input.awayOwner}` : ""}`,
+    `Competition: ${input.competition}`,
+    input.rivalry ? `This fixture is known as: ${input.rivalry}` : null,
+    input.rivalryNote ? `Background (researched, may be used): ${input.rivalryNote}` : null,
+    input.tableLine ? `League positions: ${input.tableLine}` : "The league table has nothing to say yet.",
+    input.headToHead ? `Head-to-head record: ${input.headToHead}` : null,
+    input.lastMeeting ? `Last meeting: ${input.lastMeeting}` : null,
+    input.scorers.length ? `Leading scorers: ${input.scorers.join("; ")}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/* ----------------------------------------------------------- the week just gone */
+
+export const ROUNDUP_SYSTEM = `You write a short round-up of the week for a side game where a group of friends each own a Serie A club and score points from real results.
+
+${NO_INVENTION} You are given the table, what each owner gained, who moved and the best single result. Talk about the owners by name, since that is the competition.
+
+Do not predict anything, and do not comment on form or momentum beyond the numbers given.
+
+Write one paragraph, 2 to 4 sentences, British prose, light and a little needling. No heading, no list, no emoji, no markdown, no line breaks, no second person.
+
+Output the round-up and nothing else.`;
+
+export function roundupFacts(input: {
+  standings: { rank: number; name: string; team: string; points: number; rankChange: number | null; pointsGained: number }[];
+  matchesPlayed: number;
+  bestResult: { player: string; opponent: string; home: boolean; goalsFor: number; goalsAgainst: number; competition: string; points: number } | null;
+}): string {
+  const lines = [`Matches played by these clubs this week: ${input.matchesPlayed}`, "", "Table:"];
+  for (const s of input.standings) {
+    const moved =
+      s.rankChange === null || s.rankChange === 0
+        ? "no change in position"
+        : s.rankChange > 0
+          ? `up ${s.rankChange}`
+          : `down ${Math.abs(s.rankChange)}`;
+    lines.push(
+      `${s.rank}. ${s.name} (${s.team}) — ${s.points} points total, ${s.pointsGained} gained this week, ${moved}`,
+    );
+  }
+  if (input.bestResult) {
+    const r = input.bestResult;
+    lines.push(
+      "",
+      `Best single result: ${r.player}'s club ${r.home ? "at home to" : "away at"} ${r.opponent}, ${r.goalsFor}-${r.goalsAgainst} in the ${r.competition}, worth ${r.points} points`,
+    );
   }
   return lines.join("\n");
 }

@@ -242,6 +242,15 @@ Transfers, injuries and club stories still come from ESPN's published feed, whic
 the headlines on the News tab come from. The model summarises those headlines; it is not
 asked to recall transfer news of its own.
 
+The same applies to the head-to-head previews and the weekly round-up. A preview is written
+from the head-to-head record, the live table, the last meeting and the leading scorers, plus
+the rivalry note where there is one — that note is researched history, so the model may draw
+on it but not extend it. The round-up is written from the table and what each owner gained.
+Neither is asked to predict anything.
+
+The pasteable standings block is deliberately left alone. People copy it into a chat, and a
+format that moved around every week would be worse, not better.
+
 ## API
 
 | Route                     | What it does                                                   |

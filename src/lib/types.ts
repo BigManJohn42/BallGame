@@ -153,6 +153,8 @@ export type WeeklySummary = {
   } | null;
   /** Plain text, ready to paste into a group chat. */
   text: string;
+  /** A short AI-written note over the table above, when AI is enabled. */
+  roundup: string | null;
 };
 
 /** One player's tally in a statistical category, among the game's clubs. */
@@ -223,6 +225,8 @@ export type DerbyHype = {
   rivalryNote: string | null;
   blurb: string;
   facts: { label: string; value: string }[];
+  /** Who wrote the blurb: the local grammar, or a model over the same facts. */
+  written: "generated" | "ai";
 };
 
 /**

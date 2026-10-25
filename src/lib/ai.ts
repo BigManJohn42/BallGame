@@ -65,25 +65,48 @@ const SAFE = new Set(
     .filter(Boolean),
 );
 
+/** Curly and straight apostrophes are the same character for our purposes. */
+function normalise(text: string): string {
+  return text.replace(/[’‘`]/g, "'");
+}
+
+/** "Adam's" is Adam. Without this every possessive reads as an unknown name. */
+function bare(word: string): string {
+  return word.replace(/'s$/, "").replace(/s'$/, "s");
+}
+
 function words(text: string): string[] {
-  return text.toLowerCase().match(/[\p{L}][\p{L}'’-]*/gu) ?? [];
+  return normalise(text).toLowerCase().match(/[\p{L}][\p{L}'-]*/gu) ?? [];
 }
 
 /**
  * True when every capitalised word in `text` also appears somewhere in
  * `facts`. Catches the invented scorer and the helpfully supplied stadium,
  * which are the two ways this goes wrong in practice.
+ *
+ * One known blind spot: a single capitalised word opening a sentence cannot be
+ * told apart from an ordinary sentence capital, so a bare "Lautaro struck" at
+ * the start of a sentence passes. A full name does not, and neither does the
+ * same word anywhere else in the sentence. The prompt is the first line of
+ * defence; this is the second.
  */
 export function isGrounded(text: string, facts: string): boolean {
-  const known = new Set(words(facts));
-  // A capital after a stop or at the start is just a sentence opening.
-  const stripped = text.replace(/(^|[.!?]\s+|["'“(]\s*)\p{Lu}/gu, (m) => m.toLowerCase());
+  const known = new Set<string>();
+  for (const word of words(facts)) {
+    known.add(word);
+    known.add(bare(word));
+  }
 
-  for (const match of stripped.matchAll(/\p{Lu}[\p{L}'’-]+/gu)) {
+  // A capital after a stop or at the start is just a sentence opening.
+  const stripped = normalise(text).replace(/(^|[.!?]\s+|["'“(]\s*)\p{Lu}/gu, (m) =>
+    m.toLowerCase(),
+  );
+
+  for (const match of stripped.matchAll(/\p{Lu}[\p{L}'-]+/gu)) {
     const word = match[0].toLowerCase();
     if (word.length < 3) continue;
-    if (SAFE.has(word)) continue;
-    if (known.has(word)) continue;
+    if (SAFE.has(word) || SAFE.has(bare(word))) continue;
+    if (known.has(word) || known.has(bare(word))) continue;
     return false;
   }
   return true;

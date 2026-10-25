@@ -63,6 +63,31 @@ describe("the grounding check", () => {
   it("is not fooled by a name appearing only in the output", () => {
     assert.ok(!isGrounded("Nicolo Barella was everywhere. Worth 4 points.", FACTS));
   });
+
+  // This one silently switched the whole feature off: models write "Adam's"
+  // with a curly apostrophe, which read as an unknown word called "adam’s".
+  it("accepts a possessive of a name that is in the facts", () => {
+    assert.ok(isGrounded("Adam’s Internazionale were held by Bologna.", `${FACTS} Adam`));
+    assert.ok(isGrounded("Adam's Internazionale were held by Bologna.", `${FACTS} Adam`));
+  });
+
+  it("accepts a plural possessive", () => {
+    assert.ok(isGrounded("Bologna’s goals came late.", FACTS));
+  });
+
+  it("still rejects a possessive of a name that is not", () => {
+    // Mid-sentence: at the start it is indistinguishable from a capitalised
+    // sentence opening, which is the documented limit of this check.
+    assert.ok(!isGrounded("The winner came off Lautaro’s boot.", FACTS));
+  });
+
+  it("catches an invented name opening a sentence when it has a surname", () => {
+    assert.ok(!isGrounded("Lautaro Martinez settled it.", FACTS));
+  });
+
+  it("treats both apostrophes the same in the facts too", () => {
+    assert.ok(isGrounded("Adam's side were held.", `${FACTS} Adam’s side`));
+  });
 });
 
 describe("the facts handed to the model", () => {

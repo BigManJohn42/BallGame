@@ -54,6 +54,10 @@ describe("derby write-ups carry the facts", () => {
     assert.ok(h.blurb.includes("Lautaro Martínez") && h.blurb.includes("Rafael Leão"), h.blurb);
   });
 
+  it("is marked as locally generated until a model rewrites it", () => {
+    assert.equal(h.written, "generated");
+  });
+
   it("keeps the rivalry note as written, not generated", () => {
     assert.equal(h.rivalry, "Derby della Madonnina");
     assert.match(h.rivalryNote, /1908/);

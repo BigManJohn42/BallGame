@@ -104,5 +104,9 @@ export function buildSummary(input: {
     biggestClimb,
     bestResult,
     text: lines.join("\n"),
+    // Filled in by game.ts when AI writing is enabled. The pasteable block
+    // above is deliberately left alone: people copy it into a chat, and a
+    // format that moved around each week would be worse, not better.
+    roundup: null,
   };
 }
